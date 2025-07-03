@@ -1,0 +1,15 @@
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Building TradeRoad App..."
+      - docker build -t traderoad-app .
+run:
+  runtime-version: latest
+  command: nginx -g "daemon off;"
+  network:
+    port: 80
+  env:
+    - name: NODE_ENV
+      value: production

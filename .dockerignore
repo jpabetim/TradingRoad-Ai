@@ -1,0 +1,50 @@
+# Archivos del entorno de desarrollo
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos de producción
+dist
+build
+
+# Archivos de configuración local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+
+# Temporal
+*.tmp
+*.temp
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# AWS y deploy (no incluir en la imagen)
+deploy/
+.github/
+docker-compose.yml
+Dockerfile.dev
