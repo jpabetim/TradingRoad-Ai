@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import RealTimeTradingChart from './components/RealTimeTradingChart';
 import AnalysisPanel from './components/AnalysisPanel';
 import ApiKeyMessage from './components/ApiKeyMessage';
 import DisplaySettingsDialog from './components/DisplaySettingsDialog';
-import { GeminiAnalysisResult, DataSource, MovingAverageConfig } from './types';
+import { GeminiAnalysisResult, DataSource, MovingAverageConfig, MarketDataPoint } from './types';
 import { analyzeChartWithGemini, ExtendedGeminiRequestPayload } from './services/geminiService';
 import { DEFAULT_SYMBOL, DEFAULT_TIMEFRAME, DEFAULT_DATA_SOURCE, CHAT_SYSTEM_PROMPT_TEMPLATE, GEMINI_MODEL_NAME, AVAILABLE_DATA_SOURCES, AVAILABLE_SYMBOLS_BINANCE, AVAILABLE_SYMBOLS_BINGX, QUICK_SELECT_TIMEFRAMES } from './constants';
 import { GoogleGenAI, Chat } from "@google/genai";
@@ -121,6 +120,9 @@ const App: React.FC = () => {
   const [chatError, setChatError] = useState<string | null>(null);
   const chatSessionRef = useRef<Chat | null>(null);
 
+  // 📝 Paso 1: Estado para los datos históricos del gráfico
+  const [historicalData, setHistoricalData] = useState<MarketDataPoint[]>([]);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem('traderoad_dataSource', JSON.stringify(dataSource));
@@ -235,6 +237,11 @@ const App: React.FC = () => {
   const handleLatestChartInfoUpdate = useCallback((info: LatestChartInfo) => setLatestChartInfo(info), []);
   const handleChartLoadingStateChange = useCallback((chartLoading: boolean) => setIsChartLoading(chartLoading), []);
 
+  // 📝 Paso 2: Función receptora para los datos históricos del gráfico
+  const handleHistoricalDataUpdate = useCallback((data: MarketDataPoint[]) => {
+    setHistoricalData(data.slice(-200)); // Usamos slice para quedarnos con las últimas 200 velas
+  }, []);
+
   const handleRequestAnalysis = useCallback(async () => {
     if (!apiKey) {
       setAnalysisError("Clave API no configurada. El análisis no puede proceder.");
@@ -300,7 +307,7 @@ const App: React.FC = () => {
     let userTextForAI = messageText.trim();
     const displaySymbolForAI = actualSymbol.includes('-') ? actualSymbol.replace('-', '/') : (actualSymbol.endsWith('USDT') ? actualSymbol.replace(/USDT$/, '/USDT') : actualSymbol);
 
-    // Inject context if a relevant analysis result is available
+    // 📝 Paso 4: Alimentar a la IA con los datos históricos del gráfico
     const chartContext = `--- CONTEXTO DEL GRÁFICO ACTUAL ---
 Símbolo: ${displaySymbolForAI}
 Temporalidad: ${timeframe.toUpperCase()}
@@ -312,6 +319,9 @@ El usuario está viendo un gráfico de trading en tiempo real con las siguientes
 - Medias móviles activas: ${movingAverages.filter(ma => ma.visible).map(ma => `${ma.type}${ma.period}`).join(', ')}
 - Tema: ${theme}
 - Dibujos de análisis IA: ${showAiAnalysisDrawings ? 'Visibles' : 'Ocultos'}
+
+DATOS HISTÓRICOS DEL GRÁFICO (últimas ${historicalData.length} velas):
+${historicalData.length > 0 ? JSON.stringify(historicalData.slice(-50), null, 2) : 'No hay datos históricos disponibles aún'}
 --- FIN DEL CONTEXTO DEL GRÁFICO ---
 `;
 
@@ -569,6 +579,7 @@ Pregunta del usuario: ${messageText.trim()}`;
               volumePaneHeight={volumePaneHeight} showAiAnalysisDrawings={showAiAnalysisDrawings}
               wSignalColor={wSignalColor} wSignalOpacity={wSignalOpacity / 100}
               showWSignals={showWSignals}
+              onHistoricalDataUpdate={handleHistoricalDataUpdate}
             />
           </div>
         </div>

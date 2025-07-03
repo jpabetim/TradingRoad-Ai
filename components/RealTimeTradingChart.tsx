@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   createChart, IChartApi, ISeriesApi,
@@ -8,7 +6,7 @@ import {
   CandlestickSeriesOptions, LineSeriesOptions, HistogramSeriesOptions // Removed SeriesType and SeriesOptionsMap
 } from 'lightweight-charts';
 import pako from 'pako';
-import { DataSource, GeminiAnalysisResult, TickerData, AnalysisPointType, MovingAverageConfig, FibonacciLevel } from '../types'; // Removed DeltaZoneSettings
+import { DataSource, GeminiAnalysisResult, TickerData, AnalysisPointType, MovingAverageConfig, FibonacciLevel, MarketDataPoint } from '../types'; // Removed DeltaZoneSettings
 import { mapTimeframeToApi } from '../constants';
 // import { IndicatorName } from '../App'; // No longer needed as RSI is removed
 
@@ -29,6 +27,8 @@ interface RealTimeTradingChartProps {
   wSignalColor: string; // Hex color string e.g. #FFD700
   wSignalOpacity: number; // Opacity from 0 to 1
   showWSignals: boolean; // New prop to control W-Signal visibility
+  // 📝 Paso 1: Nueva prop para recibir los datos históricos
+  onHistoricalDataUpdate: (data: MarketDataPoint[]) => void;
   // RSI and DeltaZoneSettings props removed
   // rsiColor: string;
   // deltaZoneSettings: DeltaZoneSettings;
@@ -175,7 +175,8 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   dataSource, symbol: rawSymbol, timeframe: rawTimeframe, analysisResult,
   onLatestChartInfoUpdate, onChartLoadingStateChange, movingAverages, theme,
   chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-  wSignalColor, wSignalOpacity, showWSignals
+  wSignalColor, wSignalOpacity, showWSignals,
+  onHistoricalDataUpdate // 📝 Extraer la nueva prop
   // RSI and DeltaZone props removed
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -202,7 +203,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
   const getStrokeColor = (type: AnalysisPointType | string, isFvg: boolean = false): string => {
     const opacity = isFvg ? '0.3' : '0.7';
-    switch(type) {
+    switch (type) {
       case AnalysisPointType.POI_OFERTA:
       case AnalysisPointType.FVG_BAJISTA:
         return `rgba(239, 68, 68, ${opacity})`;
@@ -215,10 +216,10 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
         return `rgba(249, 115, 22, ${opacity})`;
       case AnalysisPointType.BOS_ALCISTA:
       case AnalysisPointType.CHOCH_ALCISTA:
-          return `rgba(16, 185, 129, ${opacity})`;
+        return `rgba(16, 185, 129, ${opacity})`;
       case AnalysisPointType.BOS_BAJISTA:
       case AnalysisPointType.CHOCH_BAJISTA:
-          return `rgba(220, 38, 38, ${opacity})`;
+        return `rgba(220, 38, 38, ${opacity})`;
       case AnalysisPointType.EQUILIBRIUM:
         return `rgba(107, 114, 128, ${opacity})`;
       default: return `rgba(156, 163, 175, ${opacity})`;
@@ -264,19 +265,19 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
     // Base options: layout.textColor is general, specific scales will be overridden.
     const chartBaseOptions: DeepPartial<ChartOptions> = {
-        ...getChartLayoutOptions(effectiveBackgroundColor, generalLayoutTextColor, gridColor, borderColor),
-        autoSize: true,
-        // Time scale and price scale options will be applied more explicitly below
-        timeScale: {
-            timeVisible: true,
-            secondsVisible: apiTimeframe.includes('m'),
-            // borderColor and textColor will be set by applyScaleStyles
-        },
-        rightPriceScale: {
-            mode: PriceScaleMode.Logarithmic,
-            // borderColor and textColor will be set by applyScaleStyles
-            scaleMargins: { top: 0.1, bottom: 0.05 },
-        },
+      ...getChartLayoutOptions(effectiveBackgroundColor, generalLayoutTextColor, gridColor, borderColor),
+      autoSize: true,
+      // Time scale and price scale options will be applied more explicitly below
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: apiTimeframe.includes('m'),
+        // borderColor and textColor will be set by applyScaleStyles
+      },
+      rightPriceScale: {
+        mode: PriceScaleMode.Logarithmic,
+        // borderColor and textColor will be set by applyScaleStyles
+        scaleMargins: { top: 0.1, bottom: 0.05 },
+      },
     };
 
     if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
@@ -316,30 +317,30 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
     // Centralized function to apply styles to all relevant scales
     const applyScaleStyles = (chart: IChartApi, txtColor: string, brdColor: string) => {
-        // Right Price Scale (Main)
-        chart.priceScale('right').applyOptions({
-            textColor: txtColor,
-            borderColor: brdColor,
-        });
+      // Right Price Scale (Main)
+      chart.priceScale('right').applyOptions({
+        textColor: txtColor,
+        borderColor: brdColor,
+      });
 
-        // Time Scale (Bottom)
-        chart.timeScale().applyOptions({
-            // textColor: txtColor, // Removed textColor due to HorzScaleOptions error
-            borderColor: brdColor,
-        });
+      // Time Scale (Bottom)
+      chart.timeScale().applyOptions({
+        // textColor: txtColor, // Removed textColor due to HorzScaleOptions error
+        borderColor: brdColor,
+      });
 
-        // Volume Price Scale
-        if (volumePriceScaleIdRef.current) {
-            chart.priceScale(volumePriceScaleIdRef.current).applyOptions({
-                // textColor: txtColor, // Already commented out
-                borderColor: brdColor,
-            });
-        }
-        // Any other scales (e.g., for RSI if it were present) would go here
+      // Volume Price Scale
+      if (volumePriceScaleIdRef.current) {
+        chart.priceScale(volumePriceScaleIdRef.current).applyOptions({
+          // textColor: txtColor, // Already commented out
+          borderColor: brdColor,
+        });
+      }
+      // Any other scales (e.g., for RSI if it were present) would go here
     };
 
     if (chartRef.current) {
-        applyScaleStyles(chartRef.current, scaleTextColor, borderColor);
+      applyScaleStyles(chartRef.current, scaleTextColor, borderColor);
     }
 
     // Fetch historical data
@@ -349,9 +350,9 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
         console.log(`Fetching historical data from: ${apiUrl}`);
         const response = await fetch(apiUrl);
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`HTTP error! status: ${response.status}, URL: ${apiUrl}, Response: ${errorText}`);
-            throw new Error(`HTTP error! status: ${response.status}, Response: ${errorText}`);
+          const errorText = await response.text();
+          console.error(`HTTP error! status: ${response.status}, URL: ${apiUrl}, Response: ${errorText}`);
+          throw new Error(`HTTP error! status: ${response.status}, Response: ${errorText}`);
         }
         const rawData = await response.json();
         const parsedData = providerConf.parseHistorical(rawData);
@@ -404,58 +405,58 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           try {
             let klineData;
             if (providerConf.type === 'bingx' && typeof event.data === "string" && event.data.includes("ping")) {
-                ws?.send(event.data.replace("ping", "pong")); return;
+              ws?.send(event.data.replace("ping", "pong")); return;
             } else if (providerConf.type === 'bingx' && event.data instanceof Blob) {
-                // BingX sends compressed binary data
-                const reader = new FileReader();
-                reader.onload = function() {
-                    try {
-                        const result = pako.inflate(new Uint8Array(reader.result as ArrayBuffer), { to: 'string' });
-                        const jsonData = JSON.parse(result);
-                        if (jsonData && jsonData.dataType && jsonData.dataType.startsWith(`${formattedSymbol}@kline_`)) {
-                             const kline = jsonData.data?.[0];
-                             if (kline) {
-                                 const newCandle = { time: kline.T / 1000 as UTCTimestamp, open: parseFloat(kline.o), high: parseFloat(kline.h), low: parseFloat(kline.l), close: parseFloat(kline.c), volume: parseFloat(kline.v) };
-                                 candlestickSeriesRef.current?.update(newCandle);
-                                 volumeSeriesRef.current?.update({ time: newCandle.time, value: newCandle.volume ?? 0, color: newCandle.close > newCandle.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'});
-                                 onLatestChartInfoUpdate({ price: newCandle.close, volume: newCandle.volume });
-                                 setHistoricalData(prev => { // Keep historical data updated for MA calcs
-                                    const newData = [...prev];
-                                    const lastBar = newData[newData.length -1];
-                                    if(lastBar && lastBar.time === newCandle.time) {
-                                        newData[newData.length -1] = newCandle;
-                                    } else {
-                                        newData.push(newCandle);
-                                    }
-                                    return newData;
-                                 });
-                             }
+              // BingX sends compressed binary data
+              const reader = new FileReader();
+              reader.onload = function () {
+                try {
+                  const result = pako.inflate(new Uint8Array(reader.result as ArrayBuffer), { to: 'string' });
+                  const jsonData = JSON.parse(result);
+                  if (jsonData && jsonData.dataType && jsonData.dataType.startsWith(`${formattedSymbol}@kline_`)) {
+                    const kline = jsonData.data?.[0];
+                    if (kline) {
+                      const newCandle = { time: kline.T / 1000 as UTCTimestamp, open: parseFloat(kline.o), high: parseFloat(kline.h), low: parseFloat(kline.l), close: parseFloat(kline.c), volume: parseFloat(kline.v) };
+                      candlestickSeriesRef.current?.update(newCandle);
+                      volumeSeriesRef.current?.update({ time: newCandle.time, value: newCandle.volume ?? 0, color: newCandle.close > newCandle.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' });
+                      onLatestChartInfoUpdate({ price: newCandle.close, volume: newCandle.volume });
+                      setHistoricalData(prev => { // Keep historical data updated for MA calcs
+                        const newData = [...prev];
+                        const lastBar = newData[newData.length - 1];
+                        if (lastBar && lastBar.time === newCandle.time) {
+                          newData[newData.length - 1] = newCandle;
+                        } else {
+                          newData.push(newCandle);
                         }
-                    } catch (e) { console.error('Error processing BingX binary message:', e); }
-                };
-                reader.readAsArrayBuffer(event.data);
-                return; // Processed async
+                        return newData;
+                      });
+                    }
+                  }
+                } catch (e) { console.error('Error processing BingX binary message:', e); }
+              };
+              reader.readAsArrayBuffer(event.data);
+              return; // Processed async
             } else {
-                const data = JSON.parse(event.data as string);
-                if (providerConf.type === 'binance' && data.e === 'kline') {
-                    klineData = providerConf.parseKline(data);
-                } else { return; } // Skip non-kline messages or other providers for now
+              const data = JSON.parse(event.data as string);
+              if (providerConf.type === 'binance' && data.e === 'kline') {
+                klineData = providerConf.parseKline(data);
+              } else { return; } // Skip non-kline messages or other providers for now
             }
 
             if (klineData) {
               candlestickSeriesRef.current?.update(klineData);
-              volumeSeriesRef.current?.update({ time: klineData.time, value: klineData.volume ?? 0, color: klineData.close > klineData.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'});
+              volumeSeriesRef.current?.update({ time: klineData.time, value: klineData.volume ?? 0, color: klineData.close > klineData.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' });
               onLatestChartInfoUpdate({ price: klineData.close, volume: klineData.volume });
               setHistoricalData(prev => { // Keep historical data updated for MA calcs
                 const newData = [...prev];
-                const lastBar = newData[newData.length -1];
-                if(lastBar && lastBar.time === klineData!.time) {
-                    newData[newData.length -1] = klineData!;
+                const lastBar = newData[newData.length - 1];
+                if (lastBar && lastBar.time === klineData!.time) {
+                  newData[newData.length - 1] = klineData!;
                 } else {
-                    newData.push(klineData!);
+                  newData.push(klineData!);
                 }
                 return newData;
-             });
+              });
             }
           } catch (e) { console.error('Error processing WebSocket kline message:', e); }
         };
@@ -499,16 +500,16 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           : calculateMA(historicalData, maConfig.period);
 
         if (chartRef.current) {
-            const maLineOptions: DeepPartial<LineSeriesOptions> = {
-                color: maConfig.color,
-                lineWidth: 1,
-                lastValueVisible: false,
-                priceLineVisible: false,
-                // pane: 0, // Removed 'pane'
-            };
-            const maSeries = (chartRef.current as any).addLineSeries(maLineOptions);
-            maSeries.setData(maData);
-            maSeriesRefs.current[maConfig.id] = maSeries;
+          const maLineOptions: DeepPartial<LineSeriesOptions> = {
+            color: maConfig.color,
+            lineWidth: 1,
+            lastValueVisible: false,
+            priceLineVisible: false,
+            // pane: 0, // Removed 'pane'
+          };
+          const maSeries = (chartRef.current as any).addLineSeries(maLineOptions);
+          maSeries.setData(maData);
+          maSeriesRefs.current[maConfig.id] = maSeries;
         }
       }
     });
@@ -550,48 +551,48 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
         // Handle W-Signal markers (Code kept for logic, but markers won't be set due to setMarkers removal)
         if (showWSignals && (point.tipo === AnalysisPointType.AI_W_SIGNAL_BULLISH || point.tipo === AnalysisPointType.AI_W_SIGNAL_BEARISH)) {
-            if (point.marker_time && point.marker_position && point.marker_shape) {
-                const r = parseInt(wSignalColor.slice(1, 3), 16);
-                const g = parseInt(wSignalColor.slice(3, 5), 16);
-                const b = parseInt(wSignalColor.slice(5, 7), 16);
-                const markerColorWithOpacity = `rgba(${r}, ${g}, ${b}, ${wSignalOpacity})`; // wSignalOpacity is already 0-1
+          if (point.marker_time && point.marker_position && point.marker_shape) {
+            const r = parseInt(wSignalColor.slice(1, 3), 16);
+            const g = parseInt(wSignalColor.slice(3, 5), 16);
+            const b = parseInt(wSignalColor.slice(5, 7), 16);
+            const markerColorWithOpacity = `rgba(${r}, ${g}, ${b}, ${wSignalOpacity})`; // wSignalOpacity is already 0-1
 
-                // This marker would be added to 'markers' array, but setMarkers is removed
-                /*
-                markers.push({
-                    time: point.marker_time as UTCTimestamp,
-                    position: point.marker_position,
-                    color: markerColorWithOpacity,
-                    shape: point.marker_shape as SeriesMarkerShape, // Cast if types.ts is fixed
-                    text: point.marker_text || 'W',
-                });
-                */
-            }
-        }
-        // Handle other general markers (Code kept for logic, but markers won't be set)
-        else if (point.marker_time && point.marker_position && point.marker_shape) {
-            let markerColor = '#FFA500'; // Default marker color (Orange) for non-W signals
-            let generalMarkerOpacity = 0.7; // Default opacity for other markers
-
-            if (point.tipo === AnalysisPointType.ENTRADA_LARGO) {
-                markerColor = `rgba(34, 197, 94, ${generalMarkerOpacity})`;
-            } else if (point.tipo === AnalysisPointType.ENTRADA_CORTO) {
-                markerColor = `rgba(239, 68, 68, ${generalMarkerOpacity})`;
-            } else if (point.marker_shape === "arrowUp") {
-                markerColor = `rgba(76, 175, 80, ${generalMarkerOpacity})`;
-            } else if (point.marker_shape === "arrowDown") {
-                 markerColor = `rgba(244, 67, 54, ${generalMarkerOpacity})`;
-            }
-             // This marker would be added to 'markers' array, but setMarkers is removed
+            // This marker would be added to 'markers' array, but setMarkers is removed
             /*
             markers.push({
                 time: point.marker_time as UTCTimestamp,
                 position: point.marker_position,
-                color: markerColor,
+                color: markerColorWithOpacity,
                 shape: point.marker_shape as SeriesMarkerShape, // Cast if types.ts is fixed
-                text: point.marker_text || '',
+                text: point.marker_text || 'W',
             });
             */
+          }
+        }
+        // Handle other general markers (Code kept for logic, but markers won't be set)
+        else if (point.marker_time && point.marker_position && point.marker_shape) {
+          let markerColor = '#FFA500'; // Default marker color (Orange) for non-W signals
+          let generalMarkerOpacity = 0.7; // Default opacity for other markers
+
+          if (point.tipo === AnalysisPointType.ENTRADA_LARGO) {
+            markerColor = `rgba(34, 197, 94, ${generalMarkerOpacity})`;
+          } else if (point.tipo === AnalysisPointType.ENTRADA_CORTO) {
+            markerColor = `rgba(239, 68, 68, ${generalMarkerOpacity})`;
+          } else if (point.marker_shape === "arrowUp") {
+            markerColor = `rgba(76, 175, 80, ${generalMarkerOpacity})`;
+          } else if (point.marker_shape === "arrowDown") {
+            markerColor = `rgba(244, 67, 54, ${generalMarkerOpacity})`;
+          }
+          // This marker would be added to 'markers' array, but setMarkers is removed
+          /*
+          markers.push({
+              time: point.marker_time as UTCTimestamp,
+              position: point.marker_position,
+              color: markerColor,
+              shape: point.marker_shape as SeriesMarkerShape, // Cast if types.ts is fixed
+              text: point.marker_text || '',
+          });
+          */
         }
       });
       // currentSeries.setMarkers(markers); // Removed due to linter error
@@ -634,43 +635,59 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   // Effect for managing pane heights (only volume now)
   useEffect(() => {
     if (chartRef.current && volumeSeriesRef.current && volumePriceScaleIdRef.current) {
-        const chart = chartRef.current;
-        // const totalHeight = chartContainerRef.current?.clientHeight ?? 600; // Fallback height
+      const chart = chartRef.current;
+      // const totalHeight = chartContainerRef.current?.clientHeight ?? 600; // Fallback height
 
-        // const minChartPaneHeight = 200; // Minimum height for the main price chart
-        // let newVolumePaneHeight = volumePaneHeight;
+      // const minChartPaneHeight = 200; // Minimum height for the main price chart
+      // let newVolumePaneHeight = volumePaneHeight;
 
-        // Ensure main chart pane has enough space
-        // if (totalHeight - newVolumePaneHeight < minChartPaneHeight) {
-        //     newVolumePaneHeight = Math.max(0, totalHeight - minChartPaneHeight);
-        // }
+      // Ensure main chart pane has enough space
+      // if (totalHeight - newVolumePaneHeight < minChartPaneHeight) {
+      //     newVolumePaneHeight = Math.max(0, totalHeight - minChartPaneHeight);
+      // }
 
 
-        if(volumePriceScaleIdRef.current) { // Ensure ID is not null
-             // The 'height' property is not valid for applyOptions on a price scale.
-             // Pane height is generally managed by the chart's overall layout or
-             // by properties on the series itself if 'pane' is used to create a new pane.
-             // Since volumePaneHeight is a prop, we'd typically adjust the chart layout
-             // configuration when the chart is created or updated, or adjust the
-             // container sizes. For simplicity, if volumePaneHeight is meant to control
-             // the *visibility* or *relative size*, that logic would be more complex and
-             // involve re-configuring the chart's pane structure or series options.
-             // For now, we'll only control visibility based on a zero height.
-            chart.priceScale(volumePriceScaleIdRef.current).applyOptions({
-                // height: newVolumePaneHeight > 0 ? newVolumePaneHeight : undefined, // Invalid property
-                visible: volumePaneHeight > 0
-            });
-        }
+      if (volumePriceScaleIdRef.current) { // Ensure ID is not null
+        // The 'height' property is not valid for applyOptions on a price scale.
+        // Pane height is generally managed by the chart's overall layout or
+        // by properties on the series itself if 'pane' is used to create a new pane.
+        // Since volumePaneHeight is a prop, we'd typically adjust the chart layout
+        // configuration when the chart is created or updated, or adjust the
+        // container sizes. For simplicity, if volumePaneHeight is meant to control
+        // the *visibility* or *relative size*, that logic would be more complex and
+        // involve re-configuring the chart's pane structure or series options.
+        // For now, we'll only control visibility based on a zero height.
+        chart.priceScale(volumePriceScaleIdRef.current).applyOptions({
+          // height: newVolumePaneHeight > 0 ? newVolumePaneHeight : undefined, // Invalid property
+          visible: volumePaneHeight > 0
+        });
+      }
 
     }
   }, [volumePaneHeight, chartRef, volumeSeriesRef, volumePriceScaleIdRef, chartContainerRef]); // Removed dependencies related to RSI, added missing refs
 
+  // 📝 Paso 2: useEffect para enviar los datos históricos hacia arriba
+  useEffect(() => {
+    if (historicalData.length > 0 && onHistoricalDataUpdate) {
+      // Convertir CandlestickData[] a MarketDataPoint[]
+      const marketDataPoints: MarketDataPoint[] = historicalData.map(candle => ({
+        time: candle.time, // UTCTimestamp se convierte a number
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+        volume: candle.volume
+      }));
+      
+      onHistoricalDataUpdate(marketDataPoints);
+    }
+  }, [historicalData, onHistoricalDataUpdate]); // ¡Importante! El efecto depende de `historicalData`
 
   // Define WebSocketCloseEvent if not globally available or import if provided by a library
   interface WebSocketCloseEvent extends Event { // This is a standard Event, but can be augmented
-      readonly code: number;
-      readonly reason: string;
-      readonly wasClean: boolean;
+    readonly code: number;
+    readonly reason: string;
+    readonly wasClean: boolean;
   }
 
 
