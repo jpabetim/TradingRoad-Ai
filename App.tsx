@@ -486,66 +486,100 @@ Pregunta del usuario: ${messageText.trim()}`;
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* 1. Análisis IA */}
+        <div className="flex items-center gap-2">
+          {/* 1. Análisis IA - Nuevo diseño con iconos y estado */}
           <button
             onClick={handleRequestAnalysis}
             disabled={analysisLoading || isChartLoading || !apiKeyPresent}
             title="Análisis IA"
-            className={`text-xs px-2 py-1 rounded transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${
               apiKeyPresent && !analysisLoading && !isChartLoading
-                ? 'bg-sky-600 hover:bg-sky-700 text-white'
-                : 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-blue-500/25'
+                : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
             }`}
           >
-            {analysisLoading ? 'Analizando...' : 'Análisis IA'}
+            <div className="w-4 h-4 flex items-center justify-center relative">
+              {analysisLoading ? (
+                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 3v18h18M7 12l3-3 4 4 5-5"/>
+                  <path d="M21 7v4h-4"/>
+                </svg>
+              )}
+            </div>
+            <span className="text-xs font-medium">
+              {analysisLoading ? 'Analizando...' : 'Análisis IA'}
+            </span>
+            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${apiKeyPresent ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-red-400'}`}></div>
           </button>
           
-          {/* 2. Asistente IA */}
+          {/* 2. TradeGuru IA - Nuevo diseño */}
           <button
             onClick={handleShowChat}
             disabled={chatLoading || !apiKeyPresent}
-            title="Asistente IA"
-            className={`text-xs px-2 py-1 rounded transition-colors ${
+            title="TradeGuru IA"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${
               apiKeyPresent && !chatLoading
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                : 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
+                : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
             }`}
           >
-            Asistente IA
+            <div className="w-4 h-4 flex items-center justify-center">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
+              </svg>
+            </div>
+            <span className="text-xs font-medium">Chat IA</span>
+            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${apiKeyPresent ? 'bg-green-400 shadow-lg shadow-green-400/50 animate-pulse' : 'bg-red-400'}`}></div>
           </button>
 
-          {/* 3. Ocultar Dibujos */}
+          {/* 3. Señales - Nuevo diseño */}
           <button
             onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)}
-            title={showAiAnalysisDrawings ? 'Ocultar Dibujos' : 'Mostrar Dibujos'}
-            className={`text-xs px-2 py-1 rounded transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+            title={showAiAnalysisDrawings ? 'Ocultar Señales' : 'Mostrar Señales'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${
+              showAiAnalysisDrawings 
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-orange-500/25'
+                : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-gray-500/25'
+            }`}
           >
-            {showAiAnalysisDrawings ? 'Ocultar Dibujos' : 'Mostrar Dibujos'}
+            <div className="w-4 h-4 flex items-center justify-center">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <span className="text-xs font-medium">Señales</span>
+            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${showAiAnalysisDrawings ? 'bg-white shadow-lg shadow-white/50' : 'bg-gray-400'}`}></div>
           </button>
 
-          {/* 4. Ocultar Panel */}
-          <button
-            onClick={() => setAnalysisPanelMode(analysisPanelMode === 'initial' ? 'analysis' : 'initial')}
-            title={analysisPanelMode === 'initial' ? 'Mostrar Panel' : 'Ocultar Panel'}
-            className={`text-xs px-2 py-1 rounded transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
-          >
-            {analysisPanelMode === 'initial' ? 'Mostrar' : 'Ocultar'}
-          </button>
-          
-          {/* 5. Símbolo de Indicadores (solo símbolo) */}
+          {/* 4. Indicadores - Solo símbolo */}
           <button
             onClick={() => setDisplaySettingsDialogOpen(true)}
-            title="Indicadores"
-            className={`p-1.5 sm:p-2 rounded transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+            title="Configuración e Indicadores"
+            className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 shadow-md ${
+              theme === 'dark' 
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/25'
+                : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-indigo-500/25'
+            }`}
           >
-            {/* Indicators icon */}
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 3v18h18"/>
               <path d="M7 12l3-3 4 4 5-5"/>
             </svg>
           </button>
 
+          {/* 5. Panel Toggle - Ocultar Panel */}
+          <button
+            onClick={() => setAnalysisPanelMode(analysisPanelMode === 'initial' ? 'analysis' : 'initial')}
+            title={analysisPanelMode === 'initial' ? 'Mostrar Panel IA' : 'Ocultar Panel IA'}
+            className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d={analysisPanelMode === 'initial' ? "M9 5v14l11-7z" : "M15 19l-7-7 7-7v14z"}/>
+            </svg>
+          </button>
+          
           {/* 6. Día y noche */}
           <button
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}

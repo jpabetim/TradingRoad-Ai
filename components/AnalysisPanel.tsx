@@ -1,9 +1,7 @@
-
-
 import React, { useRef, useEffect, useState } from 'react';
 import { GeminiAnalysisResult, TradeSetup, AnalysisPointType, FibonacciAnalysis, FibonacciLevel } from '../types';
 import { AnalysisPanelMode, ChatMessage } from '../App';
-import { calculateFibonacciRetracements, calculateFibonacciExtensions } from '../utils/fibonacci'; 
+import { calculateFibonacciRetracements, calculateFibonacciExtensions } from '../utils/fibonacci';
 
 interface AnalysisPanelProps {
   panelMode: AnalysisPanelMode;
@@ -23,18 +21,18 @@ const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }: { c
   <h3 className="text-md sm:text-lg font-semibold mt-3 sm:mt-4 mb-1.5 sm:mb-2 text-sky-400 border-b border-slate-700 pb-1">{children}</h3>
 );
 
-const DetailItem: React.FC<{ label: string; value?: string | number | null; isCode?: boolean; valueClassName?: string }> = ({ 
-  label, 
-  value, 
-  isCode = false, 
-  valueClassName = "" 
-}: { 
-  label: string; 
-  value?: string | number | null; 
-  isCode?: boolean; 
-  valueClassName?: string 
+const DetailItem: React.FC<{ label: string; value?: string | number | null; isCode?: boolean; valueClassName?: string }> = ({
+  label,
+  value,
+  isCode = false,
+  valueClassName = ""
+}: {
+  label: string;
+  value?: string | number | null;
+  isCode?: boolean;
+  valueClassName?: string
 }) => (
-  value || value === 0 ? ( 
+  value || value === 0 ? (
     <p className="text-xs sm:text-sm text-slate-300">
       <span className="font-medium text-slate-100">{label}:</span>{' '}
       {isCode ? <code className="text-xs bg-slate-600 p-0.5 sm:p-1 rounded">{value}</code> : <span className={valueClassName}>{value}</span>}
@@ -43,9 +41,9 @@ const DetailItem: React.FC<{ label: string; value?: string | number | null; isCo
 );
 
 
-const TradeSetupDisplay: React.FC<{ setup: TradeSetup | undefined; }> = ({ 
-  setup 
-}: { 
+const TradeSetupDisplay: React.FC<{ setup: TradeSetup | undefined; }> = ({
+  setup
+}: {
   setup: TradeSetup | undefined;
 }) => {
   if (!setup || setup.tipo === "ninguno") {
@@ -77,10 +75,10 @@ const FibonacciLevelDisplay: React.FC<{ level: FibonacciLevel }> = ({ level }: {
   </li>
 );
 
-const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | undefined }> = ({ 
-  fiboAnalysis 
-}: { 
-  fiboAnalysis: FibonacciAnalysis | undefined 
+const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | undefined }> = ({
+  fiboAnalysis
+}: {
+  fiboAnalysis: FibonacciAnalysis | undefined
 }) => {
   if (!fiboAnalysis) {
     return <p className="text-xs sm:text-sm text-slate-400 italic">Análisis Fibonacci no disponible.</p>;
@@ -93,17 +91,17 @@ const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | und
     [0.236, 0.382, 0.5, 0.618, 0.786]
   );
 
-  const extensionLevels = fiboAnalysis.precio_fin_retroceso !== undefined 
+  const extensionLevels = fiboAnalysis.precio_fin_retroceso !== undefined
     ? calculateFibonacciExtensions(
-        fiboAnalysis.precio_inicio_impulso,
-        fiboAnalysis.precio_fin_impulso,
-        fiboAnalysis.precio_fin_retroceso,
-        [1.272, 1.414, 1.618, 2.618]
-      )
+      fiboAnalysis.precio_inicio_impulso,
+      fiboAnalysis.precio_fin_impulso,
+      fiboAnalysis.precio_fin_retroceso,
+      [1.272, 1.414, 1.618, 2.618]
+    )
     : [];
 
   const isUpwardImpulse = fiboAnalysis.precio_fin_impulso > fiboAnalysis.precio_inicio_impulso;
-  
+
   const sortedRetracementLevels = [...retracementLevels].sort((a, b) => {
     return isUpwardImpulse ? b.price - a.price : a.price - b.price;
   });
@@ -119,7 +117,7 @@ const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | und
         <DetailItem label="Inicio Impulso (A)" value={fiboAnalysis.precio_inicio_impulso ? `$${fiboAnalysis.precio_inicio_impulso.toFixed(Math.abs(fiboAnalysis.precio_inicio_impulso) < 1 ? 4 : 2)}` : 'N/A'} />
         <DetailItem label="Fin Impulso (B)" value={fiboAnalysis.precio_fin_impulso ? `$${fiboAnalysis.precio_fin_impulso.toFixed(Math.abs(fiboAnalysis.precio_fin_impulso) < 1 ? 4 : 2)}` : 'N/A'} />
         {fiboAnalysis.precio_fin_retroceso != null && (
-             <DetailItem label="Fin Retroceso (C)" value={`$${fiboAnalysis.precio_fin_retroceso.toFixed(Math.abs(fiboAnalysis.precio_fin_retroceso) < 1 ? 4 : 2)}`} />
+          <DetailItem label="Fin Retroceso (C)" value={`$${fiboAnalysis.precio_fin_retroceso.toFixed(Math.abs(fiboAnalysis.precio_fin_retroceso) < 1 ? 4 : 2)}`} />
         )}
       </div>
 
@@ -183,7 +181,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       setChatInputValue('');
     }
   };
-  
+
   const StatusDisplayWrapper: React.FC<{ title: string; children: React.ReactNode; titleColor?: string }> = ({ title, children, titleColor = "text-sky-400" }) => (
     <div className="p-3 sm:p-4 bg-slate-800 rounded-lg shadow h-full">
       <h2 className={`text-lg sm:text-xl font-semibold mb-2 ${titleColor}`}>{title}</h2>
@@ -212,9 +210,9 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     const activeSignalColorClass = activeSignalColorMap[activeSignalType?.toLowerCase() || ''] || 'text-slate-300';
 
     return (
-      <div className="p-3 sm:p-4"> 
+      <div className="p-3 sm:p-4">
         <h2 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3 text-sky-400">Resultados del Análisis IA</h2>
-         {primaryScenario && (
+        {primaryScenario && (
           <>
             <SectionTitle>Escenario Principal</SectionTitle>
             <div className="p-2 sm:p-3 bg-slate-700 rounded-md">
@@ -224,18 +222,18 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 <p className="text-xs text-slate-400 mt-1">Invalidación: {primaryScenario.niveles_clave_de_invalidacion}</p>
               )}
               {primaryScenario.trade_setup_asociado && primaryScenario.trade_setup_asociado.tipo !== "ninguno" && (
-                   <>
-                      <p className="text-xs font-semibold text-slate-100 mt-1.5 sm:mt-2">
-                        Configuración Asociada: <span className={primaryScenario.trade_setup_asociado.tipo === 'largo' ? 'text-green-400' : 'text-red-400'}>{primaryScenario.trade_setup_asociado.tipo.toUpperCase()}</span>
-                      </p>
-                      <TradeSetupDisplay setup={primaryScenario.trade_setup_asociado} />
-                   </>
+                <>
+                  <p className="text-xs font-semibold text-slate-100 mt-1.5 sm:mt-2">
+                    Configuración Asociada: <span className={primaryScenario.trade_setup_asociado.tipo === 'largo' ? 'text-green-400' : 'text-red-400'}>{primaryScenario.trade_setup_asociado.tipo.toUpperCase()}</span>
+                  </p>
+                  <TradeSetupDisplay setup={primaryScenario.trade_setup_asociado} />
+                </>
               )}
             </div>
           </>
         )}
         {!primaryScenario && (
-             <p className="text-xs sm:text-sm text-slate-400 italic">No se identificó un escenario principal.</p>
+          <p className="text-xs sm:text-sm text-slate-400 italic">No se identificó un escenario principal.</p>
         )}
         {alternativeScenarios.length > 0 && (
           <>
@@ -292,13 +290,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         {analysisResult.analisis_general?.estructura_mercado_resumen && Object.entries(analysisResult.analisis_general.estructura_mercado_resumen).map(([tf, desc]) =>
           desc && <DetailItem key={tf} label={`Estructura (${tf.replace('htf_', '').replace('mtf_', '').replace('ltf_', '')})`} value={desc as string} />)}
         <DetailItem label="Fase Wyckoff" value={analysisResult.analisis_general?.fase_wyckoff_actual} />
-        <DetailItem label="Sesgo General" value={analysisResult.analisis_general?.sesgo_direccional_general?.toUpperCase()} valueClassName={biasColorClass + " font-semibold"}/>
+        <DetailItem label="Sesgo General" value={analysisResult.analisis_general?.sesgo_direccional_general?.toUpperCase()} valueClassName={biasColorClass + " font-semibold"} />
         {analysisResult.analisis_general?.comentario_volumen && (
           <p className="text-xs sm:text-sm text-slate-300 mt-1"><span className="font-medium text-slate-100">Comentario Breve de Volumen:</span> {analysisResult.analisis_general.comentario_volumen}</p>)}
         {analysisResult.analisis_general?.interpretacion_volumen_detallada && (
           <p className="text-xs sm:text-sm text-slate-300 mt-1"><span className="font-medium text-slate-100">Análisis Detallado de Volumen:</span> {analysisResult.analisis_general.interpretacion_volumen_detallada}</p>)}
-         {analysisResult.analisis_general?.comentario_funding_rate_oi && (
-           <> <SectionTitle>Análisis Conceptual FR/OI</SectionTitle>
+        {analysisResult.analisis_general?.comentario_funding_rate_oi && (
+          <> <SectionTitle>Análisis Conceptual FR/OI</SectionTitle>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 mb-1.5 sm:mb-2 p-2 sm:p-3 bg-slate-700 rounded-md">
               {analysisResult.analisis_general.comentario_funding_rate_oi} </p> </>)}
         <SectionTitle>Conclusión y Recomendaciones</SectionTitle>
@@ -306,13 +304,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <p className="text-xs sm:text-sm text-slate-300 mt-1 mb-1.5 sm:mb-2 p-2 sm:p-3 bg-slate-700 rounded-md">{analysisResult.conclusion_recomendacion.resumen_ejecutivo}</p>)}
         <DetailItem label="Próximo Movimiento Esperado" value={analysisResult.conclusion_recomendacion?.proximo_movimiento_esperado} />
         {analysisResult.conclusion_recomendacion?.oportunidades_reentrada_detectadas && (
-           <> <h4 className="text-sm font-semibold mt-2 mb-1 text-sky-300">Oportunidades de Reentrada:</h4>
+          <> <h4 className="text-sm font-semibold mt-2 mb-1 text-sky-300">Oportunidades de Reentrada:</h4>
             <p className="text-xs sm:text-sm text-slate-300 p-2 bg-slate-700/70 rounded-md">{analysisResult.conclusion_recomendacion.oportunidades_reentrada_detectadas}</p> </>)}
         {analysisResult.conclusion_recomendacion?.consideraciones_salida_trade && (
-           <> <h4 className="text-sm font-semibold mt-2 mb-1 text-sky-300">Consideraciones de Salida:</h4>
+          <> <h4 className="text-sm font-semibold mt-2 mb-1 text-sky-300">Consideraciones de Salida:</h4>
             <p className="text-xs sm:text-sm text-slate-300 p-2 bg-slate-700/70 rounded-md">{analysisResult.conclusion_recomendacion.consideraciones_salida_trade}</p> </>)}
         {analysisResult.conclusion_recomendacion?.senales_confluencia_avanzada && (
-           <> <h4 className="text-sm font-semibold mt-2 mb-1 text-sky-300">Señales Avanzadas de Confluencia (Conceptual):</h4>
+          <> <h4 className="text-sm font-semibold mt-2 mb-1 text-sky-300">Señales Avanzadas de Confluencia (Conceptual):</h4>
             <p className="text-xs sm:text-sm text-slate-300 p-2 bg-slate-700/70 rounded-md">{analysisResult.conclusion_recomendacion.senales_confluencia_avanzada}</p> </>)}
         <DetailItem label="Advertencias/Riesgos" value={analysisResult.conclusion_recomendacion?.advertencias_riesgos} />
       </div>
@@ -331,24 +329,30 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
     return (
       <div className={`flex flex-col h-full ${chatContainerBg} ${chatTextColor}`}>
-        <div className={`flex justify-between items-center p-3 sm:p-4 border-b ${inputBorderColor} flex-shrink-0`}>
-          <div className="flex items-center gap-2">
-            {/* Robot icon */}
-            <svg className="w-6 h-6 text-sky-400" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
-            </svg>
-            <h2 className="text-lg sm:text-xl font-semibold text-sky-400">Asistente IA</h2>
+        <div className={`flex justify-between items-center p-3 sm:p-4 border-b ${inputBorderColor} flex-shrink-0 bg-gradient-to-r from-emerald-600 to-teal-600 text-white`}>
+          <div className="flex items-center gap-3">
+            {/* TradeGuru AI Image */}
+            <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-white">TradeGuru IA</h2>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${apiKeyPresent ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                <span className="text-xs text-white/90">{apiKeyPresent ? 'Online' : 'Offline'}</span>
+              </div>
+            </div>
           </div>
           {apiKeyPresent && chatMessages.length > 0 && (
             <button
               onClick={onClearChatHistory}
-              className={`p-1 rounded-md transition-colors ${
-                theme === 'dark' ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-              }`}
+              className="p-2 rounded-lg transition-colors text-white/80 hover:text-white hover:bg-white/20"
               title="Borrar historial del chat"
               aria-label="Borrar historial del chat"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4 sm:w-5 sm:h-5">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.56 0c1.153 0 2.243.032 3.223.096M15 5.25a3 3 0 00-3-3m-3 3a3 3 0 01-3-3m-3 3a3 3 0 003 3m3 3a3 3 0 013 3m3 3a3 3 0 003-3" />
               </svg>
             </button>
@@ -356,8 +360,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         </div>
         <div className="flex-grow p-3 sm:p-4 space-y-3 overflow-y-auto">
           {!apiKeyPresent && (
-             <div className="p-3 text-sm text-yellow-300 bg-yellow-800 bg-opacity-50 rounded-lg border border-yellow-600">
-                Clave API no configurada. Las funciones de Chat IA están deshabilitadas.
+            <div className="p-3 text-sm text-yellow-300 bg-yellow-800 bg-opacity-50 rounded-lg border border-yellow-600">
+              Clave API no configurada. Las funciones de Chat IA están deshabilitadas.
             </div>
           )}
           {apiKeyPresent && chatError && (
@@ -365,38 +369,76 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               Error en Chat: {chatError}
             </div>
           )}
-          
+
           {/* Mensaje de bienvenida cuando no hay mensajes */}
           {chatMessages.length === 0 && apiKeyPresent && !chatError && (
-            <div className={`p-4 rounded-lg ${aiMessageBg} ${aiMessageText}`}>
-              <p className="text-sm">
-                ¡Hola! Soy tu asistente IA especializado en trading. Estoy aquí para ayudarte en la sección de análisis. ¿En qué puedo ayudarte?
-              </p>
+            <div className={`p-4 rounded-lg ${aiMessageBg} ${aiMessageText} border-l-4 border-emerald-500`}>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-1">
+                  <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium mb-1">¡Hola! Soy TradeGuru IA</p>
+                  <p className="text-xs opacity-80 mb-2">
+                    Puedo ver y analizar tu gráfico actual en tiempo real. Tengo acceso a:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                      </svg>
+                      <span>Gráfico actual</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                      </svg>
+                      <span>Niveles y zonas</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                      </svg>
+                      <span>Medias móviles</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                      </svg>
+                      <span>POIs y FVGs</span>
+                    </div>
+                  </div>
+                  <p className="text-xs opacity-80 mt-2">
+                    Pregúntame sobre cualquier aspecto del gráfico o análisis.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
-          
+
           {chatMessages.map((msg) => (
             <div
               key={msg.id}
               className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] p-2 sm:p-3 rounded-lg text-xs sm:text-sm shadow ${
-                  msg.sender === 'user'
+                className={`max-w-[80%] p-2 sm:p-3 rounded-lg text-xs sm:text-sm shadow ${msg.sender === 'user'
                     ? `${userMessageBg} text-white`
                     : `${aiMessageBg} ${aiMessageText}`
-                }`}
+                  }`}
                 dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>').replace(/```json\s*\n?(.*?)\n?\s*```/gs, (_, p1) => `<pre class="bg-slate-900 text-slate-100 p-2 rounded overflow-x-auto text-xs">${p1.replace(/</g, '&lt;').replace(/>/g, '&gt;').trim()}</pre>`).replace(/`([^`]+)`/g, '<code class="bg-opacity-50 bg-black text-white px-1 py-0.5 rounded text-xs">$1</code>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') }}
               />
             </div>
           ))}
           <div ref={chatMessagesEndRef} />
         </div>
-        
+
         {chatLoading && (
-            <div className={`px-3 sm:px-4 pb-1 text-xs text-center ${theme === 'dark' ? 'text-sky-300' : 'text-sky-600'}`}>
-                TradeGuru IA está pensando...
-            </div>
+          <div className={`px-3 sm:px-4 pb-1 text-xs text-center ${theme === 'dark' ? 'text-sky-300' : 'text-sky-600'}`}>
+            TradeGuru IA está pensando...
+          </div>
         )}
 
         {/* Sección de input y status */}
@@ -427,29 +469,27 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               Enviar
             </button>
           </div>
-          
+
           {/* Status section */}
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-slate-400">Sección: Análisis</span>
+            <div className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full ${apiKeyPresent ? 'bg-green-400' : 'bg-red-400'}`}></div>
+              <span className="text-xs text-slate-400">Con Visión del Gráfico</span>
+            </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-green-400">+0.85%</span>
-              <button className="p-1 rounded-full bg-indigo-600 hover:bg-indigo-700">
-                <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
-                </svg>
-              </button>
+              <span className="text-xs text-green-400">{apiKeyPresent ? 'Online' : 'Offline'}</span>
             </div>
           </div>
         </div>
       </div>
     );
   };
-  
+
   if (panelMode === 'initial') {
-     return (
-        <StatusDisplayWrapper title="Panel de IA">
-          Selecciona "Análisis IA" para un análisis técnico o "Asistente IA" para chatear.
-        </StatusDisplayWrapper>
+    return (
+      <StatusDisplayWrapper title="Panel de IA">
+        Selecciona "Análisis IA" para un análisis técnico o "Asistente IA" para chatear.
+      </StatusDisplayWrapper>
     );
   }
 
