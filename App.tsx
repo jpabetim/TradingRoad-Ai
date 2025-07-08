@@ -5,7 +5,7 @@ import ApiKeyMessage from './components/ApiKeyMessage';
 import DisplaySettingsDialog from './components/DisplaySettingsDialog';
 import TemplateManager from './components/TemplateManager';
 import { GeminiAnalysisResult, DataSource, MovingAverageConfig, MarketDataPoint, ChartTemplate } from './types';
-import { analyzeChartWithGemini, ExtendedGeminiRequestPayload } from './services/geminiService';
+import { analyzeChartWithGemini, ExtendedGeminiRequestPayload, getGeminiApiKey } from './services/geminiService';
 import { DEFAULT_SYMBOL, DEFAULT_TIMEFRAME, DEFAULT_DATA_SOURCE, CHAT_SYSTEM_PROMPT_TEMPLATE, GEMINI_MODEL_NAME, AVAILABLE_DATA_SOURCES, AVAILABLE_SYMBOLS_BINANCE, AVAILABLE_SYMBOLS_BINGX, QUICK_SELECT_TIMEFRAMES, DEFAULT_FAVORITE_TIMEFRAMES } from './constants';
 import { GoogleGenAI, Chat } from "@google/genai";
 import { useTemplateManager, TemplateConfiguration } from './hooks/useTemplateManager';
@@ -153,17 +153,14 @@ const App: React.FC = () => {
   ]);
 
   useEffect(() => {
-    let keyFromEnv: string | undefined = undefined;
-    if (typeof window !== 'undefined' && window.process && window.process.env && typeof window.process.env.API_KEY === 'string') {
-      keyFromEnv = window.process.env.API_KEY;
-    }
-    if (keyFromEnv && keyFromEnv !== "TU_CLAVE_API_DE_GEMINI_AQUI") {
+    try {
+      const keyFromEnv = getGeminiApiKey();
       setApiKey(keyFromEnv);
       setApiKeyPresent(true);
-    } else {
+    } catch (error) {
       setApiKey(null);
       setApiKeyPresent(false);
-      console.warn("Gemini API Key (API_KEY) is not set or is the placeholder value. AI analysis will be disabled.");
+      console.warn("Gemini API Key is not configured properly. AI analysis will be disabled.");
     }
   }, []);
 

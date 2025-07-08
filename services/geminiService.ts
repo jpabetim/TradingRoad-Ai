@@ -3,6 +3,22 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { GeminiAnalysisResult, GeminiRequestPayload } from "../types";
 import { GEMINI_MODEL_NAME, getFullAnalysisPrompt } from "../constants";
 
+// Función para obtener la API key desde las variables de entorno
+export const getGeminiApiKey = (): string => {
+  // Intentar obtener la API key desde las variables de entorno de Vite
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 
+                 (window as any).API_KEY || 
+                 (process.env as any).GEMINI_API_KEY || 
+                 (process.env as any).API_KEY;
+  
+  if (!apiKey || apiKey === "TU_CLAVE_API_DE_GEMINI_AQUI" || apiKey === "your_gemini_api_key_here") {
+    console.error("Gemini API Key (API_KEY) is not set or is the placeholder value. AI analysis will be disabled.");
+    throw new Error("Gemini API Key is not configured. Please set VITE_GEMINI_API_KEY in your environment variables.");
+  }
+  
+  return apiKey;
+};
+
 // Función auxiliar para intentar reparar JSON incompleto - versión simple
 function attemptJSONRepair(jsonString: string): string {
   let repaired = jsonString.trim();

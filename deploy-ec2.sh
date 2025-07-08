@@ -59,15 +59,16 @@ cd traderoad
 
 # Instalar dependencias y construir
 npm install
-npm run build
 
-# Configurar variables de entorno en el HTML
+# Configurar variables de entorno
 echo "🔑 Configurando variables de entorno..."
 echo "Por favor, ingresa tu clave API de Gemini:"
 read -s GEMINI_API_KEY
 
-# Inyectar la clave API en el HTML construido
-sed -i "s/TU_CLAVE_API_DE_GEMINI_AQUI/$GEMINI_API_KEY/g" dist/index.html
+# Crear archivo .env en el servidor
+echo "VITE_GEMINI_API_KEY=$GEMINI_API_KEY" > .env
+
+npm run build
 
 # Configurar Nginx
 sudo tee /etc/nginx/sites-available/traderoad << 'EOF'
