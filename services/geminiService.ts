@@ -6,10 +6,10 @@ import { GEMINI_MODEL_NAME, getFullAnalysisPrompt } from "../constants";
 // Función para obtener la API key desde las variables de entorno
 export const getGeminiApiKey = (): string => {
   // Orden de prioridad: 1. import.meta.env (desarrollo Vite), 2. process.env (build de producción)
-  const apiKey = import.meta.env?.VITE_GEMINI_API_KEY || 
-                 (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
-                 (typeof process !== 'undefined' && process.env?.API_KEY);
-  
+  const apiKey = import.meta.env?.VITE_GEMINI_API_KEY ||
+    (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ||
+    (typeof process !== 'undefined' && process.env?.API_KEY);
+
   console.log('🔍 Debug API Key detection:', {
     viteEnv: import.meta.env?.VITE_GEMINI_API_KEY ? 'Found' : 'Not found',
     processGemini: (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) ? 'Found' : 'Not found',
@@ -17,12 +17,12 @@ export const getGeminiApiKey = (): string => {
     finalKey: apiKey ? `Found (${apiKey.substring(0, 10)}...)` : 'Not found',
     env: typeof import.meta !== 'undefined' ? 'Vite' : 'Node'
   });
-  
+
   if (!apiKey || apiKey === "TU_CLAVE_API_DE_GEMINI_AQUI" || apiKey === "your_gemini_api_key_here") {
     console.error("Gemini API Key (VITE_GEMINI_API_KEY) is not set or is the placeholder value. AI analysis will be disabled.");
     throw new Error("Gemini API Key is not configured. Please set VITE_GEMINI_API_KEY in your environment variables.");
   }
-  
+
   return apiKey;
 };
 

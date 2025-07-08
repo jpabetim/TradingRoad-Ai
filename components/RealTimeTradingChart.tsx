@@ -517,212 +517,185 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   }, [movingAverages, historicalData]); // Re-run if MAs config or historical data changes
 
   // Effect for drawing analysis results
+  // Funciones para calcular niveles de Fibonacci
+  const calculateFibonacciRetracements = (start: number, end: number) => {
+    const diff = end - start;
+    const isUptrend = end > start;
+    
+    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+    
+    return levels.map(level => ({
+      level,
+      price: isUptrend ? end - (diff * level) : start + (diff * level),
+      label: `${(level * 100).toFixed(1)}%`
+    }));
+  };
+
+  const calculateFibonacciExtensions = (start: number, end: number, retracement: number) => {
+    const diff = end - start;
+    const isUptrend = end > start;
+    const retracementDiff = retracement - end;
+    
+    const levels = [1.272, 1.414, 1.618, 2.0, 2.618];
+    
+    return levels.map(level => ({
+      level,
+      price: isUptrend ? retracement + (Math.abs(retracementDiff) * level) : retracement - (Math.abs(retracementDiff) * level),
+      label: `${(level * 100).toFixed(1)}%`
+    }));
+  };
+
   useEffect(() => {
-    if (!chartRef.current) return;
+    const chart = chartRef.current;
+    const currentSeries = candlestickSeriesRef.current;
 
-    // Clear previous analysis drawings
-    analysisPriceLinesRef.current.forEach(line => candlestickSeriesRef.current?.removePriceLine(line));
+    if (!chart || !currentSeries) return;
+
+    // Limpiar dibujos del análisis anterior
+    analysisPriceLinesRef.current.forEach(line => currentSeries.removePriceLine(line));
     analysisPriceLinesRef.current = [];
-    // candlestickSeriesRef.current?.setMarkers([]); // Removed due to linter error
-    // projectionSeriesRef.current?.setData([]); // Clear projection path - eliminado
+    // Limpiar marcadores si es necesario (comentado por error de linter)
+    // currentSeries.setMarkers([]);
 
-    if (analysisResult && showAiAnalysisDrawings && candlestickSeriesRef.current) {
+    if (analysisResult && showAiAnalysisDrawings) {
       const { puntos_clave_grafico, analisis_fibonacci } = analysisResult;
-      // proyeccion_precio_visual eliminado - ya no se usa
-      const currentSeries = candlestickSeriesRef.current;
-      const markers: SeriesMarker<Time>[] = []; // This will be unused if setMarkers is removed
+      const markers: SeriesMarker<Time>[] = [];
 
-      // Draw price lines for levels and zones
+      // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) ---
       puntos_clave_grafico?.forEach(point => {
         const color = getStrokeColor(point.tipo);
-        // const textColor = getTextColorForZone(color); // Not directly used for price lines/markers, but useful for custom HTML markers
-
+        
         if (point.nivel != null) {
-          const line = currentSeries.createPriceLine({ price: point.nivel, color, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: point.label });
+          const line = currentSeries.createPriceLine({
+            price: point.nivel,
+            color,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: point.label
+          });
           analysisPriceLinesRef.current.push(line);
         } else if (point.zona) {
           const [minPrice, maxPrice] = point.zona;
           const isFvg = point.tipo === AnalysisPointType.FVG_ALCISTA || point.tipo === AnalysisPointType.FVG_BAJISTA;
           const zoneColor = getStrokeColor(point.tipo, isFvg);
-
-          const lineTop = currentSeries.createPriceLine({ price: maxPrice, color: zoneColor, lineWidth: isFvg ? 3 : 1, lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted, axisLabelVisible: true, title: `${point.label} (H)` });
-          const lineBottom = currentSeries.createPriceLine({ price: minPrice, color: zoneColor, lineWidth: isFvg ? 3 : 1, lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted, axisLabelVisible: true, title: `${point.label} (L)` });
+          
+          const lineTop = currentSeries.createPriceLine({
+            price: maxPrice,
+            color: zoneColor,
+            lineWidth: isFvg ? 3 : 1,
+            lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: `${point.label} (H)`
+          });
+          const lineBottom = currentSeries.createPriceLine({
+            price: minPrice,
+            color: zoneColor,
+            lineWidth: isFvg ? 3 : 1,
+            lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: `${point.label} (L)`
+          });
           analysisPriceLinesRef.current.push(lineTop, lineBottom);
         }
 
-        // Handle W-Signal markers (Code kept for logic, but markers won't be set due to setMarkers removal)
+        // Manejar marcadores W-Signal
         if (showWSignals && (point.tipo === AnalysisPointType.AI_W_SIGNAL_BULLISH || point.tipo === AnalysisPointType.AI_W_SIGNAL_BEARISH)) {
           if (point.marker_time && point.marker_position && point.marker_shape) {
             const r = parseInt(wSignalColor.slice(1, 3), 16);
             const g = parseInt(wSignalColor.slice(3, 5), 16);
             const b = parseInt(wSignalColor.slice(5, 7), 16);
-            const markerColorWithOpacity = `rgba(${r}, ${g}, ${b}, ${wSignalOpacity})`; // wSignalOpacity is already 0-1
+            const markerColorWithOpacity = `rgba(${r}, ${g}, ${b}, ${wSignalOpacity})`;
 
-            // This marker would be added to 'markers' array, but setMarkers is removed
+            // Marcador se añadiría al array markers (comentado por error de linter)
             /*
             markers.push({
-                time: point.marker_time as UTCTimestamp,
-                position: point.marker_position,
-                color: markerColorWithOpacity,
-                shape: point.marker_shape as SeriesMarkerShape, // Cast if types.ts is fixed
-                text: point.marker_text || 'W',
+              time: point.marker_time as UTCTimestamp,
+              position: point.marker_position,
+              color: markerColorWithOpacity,
+              shape: point.marker_shape as SeriesMarkerShape,
+              text: point.marker_text || 'W',
             });
             */
           }
         }
-        // Handle other general markers (Code kept for logic, but markers won't be set)
-        else if (point.marker_time && point.marker_position && point.marker_shape) {
-          let markerColor = '#FFA500'; // Default marker color (Orange) for non-W signals
-          let generalMarkerOpacity = 0.7; // Default opacity for other markers
-
-          if (point.tipo === AnalysisPointType.ENTRADA_LARGO) {
-            markerColor = `rgba(34, 197, 94, ${generalMarkerOpacity})`;
-          } else if (point.tipo === AnalysisPointType.ENTRADA_CORTO) {
-            markerColor = `rgba(239, 68, 68, ${generalMarkerOpacity})`;
-          } else if (point.marker_shape === "arrowUp") {
-            markerColor = `rgba(76, 175, 80, ${generalMarkerOpacity})`;
-          } else if (point.marker_shape === "arrowDown") {
-            markerColor = `rgba(244, 67, 54, ${generalMarkerOpacity})`;
-          }
-          // This marker would be added to 'markers' array, but setMarkers is removed
-          /*
-          markers.push({
-              time: point.marker_time as UTCTimestamp,
-              position: point.marker_position,
-              color: markerColor,
-              shape: point.marker_shape as SeriesMarkerShape, // Cast if types.ts is fixed
-              text: point.marker_text || '',
-          });
-          */
-        }
       });
-      // currentSeries.setMarkers(markers); // Removed due to linter error
+      
+      // currentSeries.setMarkers(markers); // Comentado por error de linter
 
-      // Draw Fibonacci levels with enhanced visualization
+      // --- DIBUJAR NIVELES DE FIBONACCI (LÓGICA CORREGIDA) ---
       if (analisis_fibonacci) {
-        const { htf, ltf, niveles_retroceso, niveles_extension } = analisis_fibonacci;
         const fiboColors = theme === 'dark' ? THEME_COLORS.dark : THEME_COLORS.light;
 
-        const drawFiboLevels = (levels: FibonacciLevel[], fiboColor: string, prefix: string = "", isExtension: boolean = false) => {
-          levels.forEach(level => {
-            // Enhanced line style based on Fibonacci level importance
-            let lineWidth: 1 | 2 | 3 | 4 = 1; // Explicit type annotation
-            let lineStyle = LineStyle.Dashed;
-
-            // Golden ratio levels (0.618, 1.618) get special treatment
-            if (level.level === 0.618 || level.level === 1.618) {
-              lineWidth = 3;
-              lineStyle = LineStyle.Solid;
-            }
-            // Major levels (0.5, 1.0) get medium thickness
-            else if (level.level === 0.5 || level.level === 1.0) {
-              lineWidth = 2;
-              lineStyle = LineStyle.Solid;
-            }
-            // Extension levels get dotted style for differentiation
-            else if (isExtension) {
-              lineStyle = LineStyle.Dotted;
-            }
-
+        const drawFiboForImpulse = (impulse: any, style: { color: string, lineStyle: LineStyle }) => {
+          if (!impulse || !impulse.precio_inicio_impulso || !impulse.precio_fin_impulso) return;
+          
+          const retracements = calculateFibonacciRetracements(impulse.precio_inicio_impulso, impulse.precio_fin_impulso);
+          const extensions = impulse.precio_fin_retroceso ? 
+            calculateFibonacciExtensions(impulse.precio_inicio_impulso, impulse.precio_fin_impulso, impulse.precio_fin_retroceso) : 
+            [];
+          
+          [...retracements, ...extensions].forEach(level => {
             const line = currentSeries.createPriceLine({
               price: level.price,
-              color: fiboColor,
-              lineWidth: lineWidth,
-              lineStyle: lineStyle,
+              color: style.color,
+              lineWidth: (level.level === 0.618 || level.level === 1.618) ? 2 : 1,
+              lineStyle: style.lineStyle,
               axisLabelVisible: true,
-              title: `${prefix}${level.label} (${level.price.toFixed(2)})`
+              title: `${level.label} (${impulse.temporalidad_analizada})`,
             });
             analysisPriceLinesRef.current.push(line);
           });
         };
 
-        // 🔥 NUEVO: Soporte para formato htf/ltf moderno
-        // Verificar si existen niveles en formato legacy (para compatibilidad)
-        if (niveles_retroceso || niveles_extension) {
-          if (niveles_retroceso) drawFiboLevels(niveles_retroceso, fiboColors.fiboRetracement, "Fib ", false);
-          if (niveles_extension) drawFiboLevels(niveles_extension, fiboColors.fiboExtension, "Ext ", true);
+        // Dibujar niveles para HTF y LTF con estilos diferentes
+        if (analisis_fibonacci.htf) {
+          drawFiboForImpulse(analisis_fibonacci.htf, { 
+            color: fiboColors.fiboRetracement, 
+            lineStyle: LineStyle.Dashed 
+          });
+        }
+        
+        if (analisis_fibonacci.ltf) {
+          drawFiboForImpulse(analisis_fibonacci.ltf, { 
+            color: fiboColors.fiboExtension, 
+            lineStyle: LineStyle.Dotted 
+          });
         }
 
-        // 🔥 NUEVO: Soporte para formato htf/ltf moderno
-        // Mostrar análisis HTF (temporalidad alta) si está disponible
-        if (htf) {
-          // Se pueden agregar líneas para indicar puntos clave del impulso HTF
-          // Por simplicidad, visualizamos solo los puntos de inicio y fin del impulso HTF
-          if (htf.precio_inicio_impulso && htf.precio_fin_impulso) {
-            const htfStartLine = currentSeries.createPriceLine({
-              price: htf.precio_inicio_impulso,
-              color: theme === 'dark' ? '#FFA500' : '#FF8C00', // Orange
-              lineWidth: 2,
+        // Compatibilidad con formato legacy (niveles_retroceso y niveles_extension)
+        const { niveles_retroceso, niveles_extension } = analisis_fibonacci;
+        
+        if (niveles_retroceso) {
+          niveles_retroceso.forEach(level => {
+            const line = currentSeries.createPriceLine({
+              price: level.price,
+              color: fiboColors.fiboRetracement,
+              lineWidth: (level.level === 0.618 || level.level === 1.618) ? 2 : 1,
               lineStyle: LineStyle.Dashed,
               axisLabelVisible: true,
-              title: `HTF Inicio Impulso (${htf.precio_inicio_impulso.toFixed(2)})`
+              title: `Fib ${level.label}`,
             });
-            analysisPriceLinesRef.current.push(htfStartLine);
-
-            const htfEndLine = currentSeries.createPriceLine({
-              price: htf.precio_fin_impulso,
-              color: theme === 'dark' ? '#FFA500' : '#FF8C00', // Orange
-              lineWidth: 2,
-              lineStyle: LineStyle.Dashed,
-              axisLabelVisible: true,
-              title: `HTF Fin Impulso (${htf.precio_fin_impulso.toFixed(2)})`
-            });
-            analysisPriceLinesRef.current.push(htfEndLine);
-          }
+            analysisPriceLinesRef.current.push(line);
+          });
         }
-
-        // Mostrar análisis LTF (temporalidad actual) si está disponible
-        if (ltf) {
-          // Visualizar puntos clave del análisis LTF
-          if (ltf.precio_inicio_impulso && ltf.precio_fin_impulso) {
-            const ltfStartLine = currentSeries.createPriceLine({
-              price: ltf.precio_inicio_impulso,
-              color: theme === 'dark' ? '#00CED1' : '#008B8B', // DarkTurquoise
-              lineWidth: 2,
-              lineStyle: LineStyle.Solid,
+        
+        if (niveles_extension) {
+          niveles_extension.forEach(level => {
+            const line = currentSeries.createPriceLine({
+              price: level.price,
+              color: fiboColors.fiboExtension,
+              lineWidth: (level.level === 1.618) ? 2 : 1,
+              lineStyle: LineStyle.Dotted,
               axisLabelVisible: true,
-              title: `LTF Inicio Impulso (${ltf.precio_inicio_impulso.toFixed(2)})`
+              title: `Ext ${level.label}`,
             });
-            analysisPriceLinesRef.current.push(ltfStartLine);
-
-            const ltfEndLine = currentSeries.createPriceLine({
-              price: ltf.precio_fin_impulso,
-              color: theme === 'dark' ? '#00CED1' : '#008B8B', // DarkTurquoise
-              lineWidth: 2,
-              lineStyle: LineStyle.Solid,
-              axisLabelVisible: true,
-              title: `LTF Fin Impulso (${ltf.precio_fin_impulso.toFixed(2)})`
-            });
-            analysisPriceLinesRef.current.push(ltfEndLine);
-
-            // Si hay precio de fin de retroceso, también mostrarlo
-            if (ltf.precio_fin_retroceso) {
-              const ltfRetracementLine = currentSeries.createPriceLine({
-                price: ltf.precio_fin_retroceso,
-                color: theme === 'dark' ? '#FFB6C1' : '#FF69B4', // LightPink/HotPink
-                lineWidth: 1,
-                lineStyle: LineStyle.Dotted,
-                axisLabelVisible: true,
-                title: `LTF Fin Retroceso (${ltf.precio_fin_retroceso.toFixed(2)})`
-              });
-              analysisPriceLinesRef.current.push(ltfRetracementLine);
-            }
-          }
+            analysisPriceLinesRef.current.push(line);
+          });
         }
       }
-
-
-      // Draw projection path if available - ELIMINADO
-      // if (proyeccion_precio_visual?.camino_probable_1 && historicalData.length > 0) {
-      //   const lastTime = historicalData[historicalData.length - 1].time;
-      //   const projectionData: LineData[] = proyeccion_precio_visual.camino_probable_1.map((price, index) => ({
-      //     time: (lastTime + (index * currentIntervalInSeconds)) as UTCTimestamp, // Approximate time for future points
-      //     value: price,
-      //   }));
-      //   projectionSeriesRef.current?.setData(projectionData);
-      // }
     }
-  }, [analysisResult, showAiAnalysisDrawings, historicalData, currentIntervalInSeconds, theme, wSignalColor, wSignalOpacity, showWSignals]); // Redraw if result, visibility, data, or W-Signal style/visibility changes
+  }, [analysisResult, showAiAnalysisDrawings, theme, wSignalColor, wSignalOpacity, showWSignals]); // Redraw if result, visibility, data, or W-Signal style/visibility changes
 
   // Effect for managing pane heights (only volume now)
   useEffect(() => {
