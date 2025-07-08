@@ -3,9 +3,16 @@
  * Fallback para crypto.randomUUID() cuando no está disponible
  */
 export function generateUUID(): string {
-  // Si crypto.randomUUID está disponible, usarlo
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
+  // Validación más estricta para crypto.randomUUID
+  if (typeof crypto !== 'undefined' && 
+      crypto.randomUUID && 
+      typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch (error) {
+      // Si falla, usar el fallback
+      console.warn('crypto.randomUUID failed, using fallback:', error);
+    }
   }
   
   // Fallback: generar UUID v4 manualmente
