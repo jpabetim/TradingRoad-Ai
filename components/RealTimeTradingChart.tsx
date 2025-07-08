@@ -521,9 +521,9 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   const calculateFibonacciRetracements = (start: number, end: number) => {
     const diff = end - start;
     const isUptrend = end > start;
-    
+
     const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
-    
+
     return levels.map(level => ({
       level,
       price: isUptrend ? end - (diff * level) : start + (diff * level),
@@ -535,9 +535,9 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
     const diff = end - start;
     const isUptrend = end > start;
     const retracementDiff = retracement - end;
-    
+
     const levels = [1.272, 1.414, 1.618, 2.0, 2.618];
-    
+
     return levels.map(level => ({
       level,
       price: isUptrend ? retracement + (Math.abs(retracementDiff) * level) : retracement - (Math.abs(retracementDiff) * level),
@@ -564,7 +564,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
       // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) ---
       puntos_clave_grafico?.forEach(point => {
         const color = getStrokeColor(point.tipo);
-        
+
         if (point.nivel != null) {
           const line = currentSeries.createPriceLine({
             price: point.nivel,
@@ -579,7 +579,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           const [minPrice, maxPrice] = point.zona;
           const isFvg = point.tipo === AnalysisPointType.FVG_ALCISTA || point.tipo === AnalysisPointType.FVG_BAJISTA;
           const zoneColor = getStrokeColor(point.tipo, isFvg);
-          
+
           const lineTop = currentSeries.createPriceLine({
             price: maxPrice,
             color: zoneColor,
@@ -620,7 +620,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           }
         }
       });
-      
+
       // currentSeries.setMarkers(markers); // Comentado por error de linter
 
       // --- DIBUJAR NIVELES DE FIBONACCI (LÓGICA CORREGIDA) ---
@@ -629,12 +629,12 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
         const drawFiboForImpulse = (impulse: any, style: { color: string, lineStyle: LineStyle }) => {
           if (!impulse || !impulse.precio_inicio_impulso || !impulse.precio_fin_impulso) return;
-          
+
           const retracements = calculateFibonacciRetracements(impulse.precio_inicio_impulso, impulse.precio_fin_impulso);
-          const extensions = impulse.precio_fin_retroceso ? 
-            calculateFibonacciExtensions(impulse.precio_inicio_impulso, impulse.precio_fin_impulso, impulse.precio_fin_retroceso) : 
+          const extensions = impulse.precio_fin_retroceso ?
+            calculateFibonacciExtensions(impulse.precio_inicio_impulso, impulse.precio_fin_impulso, impulse.precio_fin_retroceso) :
             [];
-          
+
           [...retracements, ...extensions].forEach(level => {
             const line = currentSeries.createPriceLine({
               price: level.price,
@@ -650,22 +650,22 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
         // Dibujar niveles para HTF y LTF con estilos diferentes
         if (analisis_fibonacci.htf) {
-          drawFiboForImpulse(analisis_fibonacci.htf, { 
-            color: fiboColors.fiboRetracement, 
-            lineStyle: LineStyle.Dashed 
+          drawFiboForImpulse(analisis_fibonacci.htf, {
+            color: fiboColors.fiboRetracement,
+            lineStyle: LineStyle.Dashed
           });
         }
-        
+
         if (analisis_fibonacci.ltf) {
-          drawFiboForImpulse(analisis_fibonacci.ltf, { 
-            color: fiboColors.fiboExtension, 
-            lineStyle: LineStyle.Dotted 
+          drawFiboForImpulse(analisis_fibonacci.ltf, {
+            color: fiboColors.fiboExtension,
+            lineStyle: LineStyle.Dotted
           });
         }
 
         // Compatibilidad con formato legacy (niveles_retroceso y niveles_extension)
         const { niveles_retroceso, niveles_extension } = analisis_fibonacci;
-        
+
         if (niveles_retroceso) {
           niveles_retroceso.forEach(level => {
             const line = currentSeries.createPriceLine({
@@ -679,7 +679,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
             analysisPriceLinesRef.current.push(line);
           });
         }
-        
+
         if (niveles_extension) {
           niveles_extension.forEach(level => {
             const line = currentSeries.createPriceLine({

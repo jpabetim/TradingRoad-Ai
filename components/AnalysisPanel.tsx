@@ -298,7 +298,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const getOpportunitiesSummary = (analysisResult: GeminiAnalysisResult) => {
     const opportunities: Array<{ style: string; type: string; scenario: string }> = [];
 
-    // Recopilar setups de todos los escenarios
+    // La única fuente de verdad serán los escenarios probables.
+    // Esto evita duplicados o setups vacíos.
     analysisResult.escenarios_probables?.forEach(scenario => {
       if (scenario.trade_setup_asociado && scenario.trade_setup_asociado.tipo !== "ninguno") {
         opportunities.push({
@@ -308,16 +309,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         });
       }
     });
-
-    // Añadir el setup recomendado principal si existe
-    if (analysisResult.conclusion_recomendacion?.mejor_oportunidad_actual &&
-      analysisResult.conclusion_recomendacion.mejor_oportunidad_actual.tipo !== "ninguno") {
-      opportunities.push({
-        style: analysisResult.conclusion_recomendacion.mejor_oportunidad_actual.estilo_trade || "sin_clasificar",
-        type: analysisResult.conclusion_recomendacion.mejor_oportunidad_actual.tipo,
-        scenario: "Oportunidad Principal"
-      });
-    }
 
     return opportunities;
   };
