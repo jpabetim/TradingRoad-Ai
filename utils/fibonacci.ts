@@ -7,39 +7,39 @@ export interface FibonacciLevel {
 }
 
 /**
- * Calculate Fibonacci retracement levels
+ * Calculate Fibonacci retracement levels (FILTRADO - solo niveles clave)
  * @param pointA - Starting price of the impulse
  * @param pointB - Ending price of the impulse  
- * @param levels - Array of Fibonacci ratios (default: [0.236, 0.382, 0.5, 0.618, 0.786])
+ * @param levels - Array of Fibonacci ratios (default: key levels only)
  * @returns Array of retracement levels
  */
 export const calculateFibonacciRetracements = (
   pointA: number,
   pointB: number,
-  levels: number[] = [0.236, 0.382, 0.5, 0.618, 0.786]
+  levels: number[] = [0.382, 0.5, 0.618, 0.78]
 ): FibonacciLevel[] => {
   const range = pointB - pointA;
 
   return levels.map(level => ({
     level,
     price: pointB - (range * level),
-    label: `Retracement ${(level * 100).toFixed(1)}%`
+    label: `${(level * 100).toFixed(1)}%`
   }));
 };
 
 /**
- * Calculate Fibonacci extension levels
+ * Calculate Fibonacci extension levels (FILTRADO - solo extensiones comunes)
  * @param pointA - Starting price of the impulse
  * @param pointB - Ending price of the impulse
  * @param pointC - End of retracement from B
- * @param levels - Array of Fibonacci extension ratios (default: [1.272, 1.414, 1.618, 2.618])
+ * @param levels - Array of Fibonacci extension ratios (default: key extensions only)
  * @returns Array of extension levels
  */
 export const calculateFibonacciExtensions = (
   pointA: number,
   pointB: number,
   pointC: number,
-  levels: number[] = [1.272, 1.414, 1.618, 2.618]
+  levels: number[] = [1.272, 1.618, 2.618]
 ): FibonacciLevel[] => {
   const impulseRange = pointB - pointA;
 
@@ -50,7 +50,7 @@ export const calculateFibonacciExtensions = (
     return {
       level,
       price: extensionPrice,
-      label: `Extension ${(level * 100).toFixed(1)}%`
+      label: `Ext ${(level * 100).toFixed(1)}%`
     };
   });
 };

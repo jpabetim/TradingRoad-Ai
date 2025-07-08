@@ -107,6 +107,12 @@ const App: React.FC = () => {
   const [wSignalOpacity, setWSignalOpacity] = useState<number>(() => getLocalStorageItem('traderoad_wSignalOpacity', INITIAL_W_SIGNAL_OPACITY));
   const [showWSignals, setShowWSignals] = useState<boolean>(() => getLocalStorageItem('traderoad_showWSignals', INITIAL_SHOW_W_SIGNALS));
 
+  // 🆕 Estado para controlar la visibilidad del Fibonacci 1H en el gráfico
+  const [showLTFFibonacci, setShowLTFFibonacci] = useState<boolean>(() => getLocalStorageItem('traderoad_showLTFFibonacci', false));
+
+  // 🆕 Estado para la zona horaria del gráfico
+  const [timezone, setTimezone] = useState<string>(() => getLocalStorageItem('traderoad_timezone', 'UTC'));
+
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyPresent, setApiKeyPresent] = useState<boolean>(false);
   const [displaySettingsDialogOpen, setDisplaySettingsDialogOpen] = useState<boolean>(false);
@@ -146,11 +152,13 @@ const App: React.FC = () => {
       localStorage.setItem('traderoad_wSignalColor', JSON.stringify(wSignalColor));
       localStorage.setItem('traderoad_wSignalOpacity', JSON.stringify(wSignalOpacity));
       localStorage.setItem('traderoad_showWSignals', JSON.stringify(showWSignals));
+      localStorage.setItem('traderoad_showLTFFibonacci', JSON.stringify(showLTFFibonacci));
+      localStorage.setItem('traderoad_timezone', JSON.stringify(timezone));
     }
   }, [
     dataSource, actualSymbol, timeframe, favoriteTimeframes, theme, movingAverages,
     chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-    wSignalColor, wSignalOpacity, showWSignals
+    wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci, timezone
   ]);
 
   useEffect(() => {
@@ -643,7 +651,7 @@ Pregunta del usuario: ${messageText.trim()}`;
                   </optgroup>
                 </select>
 
-                {/* Enhanced Add/Remove favorite button with counter */}
+                {/* Enhanced Add/Remove favorite button with star icon */}
                 <button
                   onClick={() => toggleTimeframeFavorite(timeframe)}
                   title={`${favoriteTimeframes.includes(timeframe) ? 'Quitar de favoritos' : 'Añadir a favoritos'} (${favoriteTimeframes.length}/8 favoritos)`}
@@ -654,14 +662,7 @@ Pregunta del usuario: ${messageText.trim()}`;
                       : 'bg-gray-200 text-gray-600 hover:bg-yellow-500 hover:text-white border border-gray-300 hover:border-yellow-500'
                     }`}
                 >
-                  {favoriteTimeframes.includes(timeframe) ? '✓' : '+'}
-                  {/* Counter badge */}
-                  <span className={`absolute -top-1 -right-1 w-4 h-4 text-xs rounded-full flex items-center justify-center font-bold ${favoriteTimeframes.length >= 8
-                    ? 'bg-red-500 text-white'
-                    : 'bg-blue-500 text-white'
-                    }`}>
-                    {favoriteTimeframes.length}
-                  </span>
+                  {favoriteTimeframes.includes(timeframe) ? '★' : '☆'}
                 </button>
               </div>
             </div>
@@ -732,6 +733,25 @@ Pregunta del usuario: ${messageText.trim()}`;
             <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${showAiAnalysisDrawings ? 'bg-white shadow-lg shadow-white/50' : 'bg-gray-400'}`}></div>
           </button>
 
+          {/* 3.5. Fibonacci 1H - Toggle */}
+          <button
+            onClick={() => setShowLTFFibonacci(!showLTFFibonacci)}
+            title={showLTFFibonacci ? 'Ocultar Fibonacci 1H' : 'Mostrar Fibonacci 1H'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${showLTFFibonacci
+              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white shadow-amber-500/25'
+              : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-gray-500/25'
+              }`}
+          >
+            <div className="w-4 h-4 flex items-center justify-center">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12l6-6 6 6" />
+                <path d="M3 18l6-6 6 6" />
+              </svg>
+            </div>
+            <span className="text-xs font-medium">Fib 1H</span>
+            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${showLTFFibonacci ? 'bg-white shadow-lg shadow-white/50' : 'bg-gray-400'}`}></div>
+          </button>
+
           {/* 4. Indicadores - Solo símbolo */}
           <button
             onClick={() => setDisplaySettingsDialogOpen(true)}
@@ -774,6 +794,27 @@ Pregunta del usuario: ${messageText.trim()}`;
             </svg>
           </button>
 
+          {/* 5.5. Zona Horaria Selector */}
+          <div className="relative">
+            <select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              title="Seleccionar zona horaria"
+              className={`text-xs px-2 py-1.5 rounded-lg border transition-colors appearance-none min-w-[60px] text-center ${theme === 'dark'
+                  ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                  : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
+                }`}
+            >
+              <option value="UTC">UTC</option>
+              <option value="UTC+1">UTC+1</option>
+              <option value="UTC+2">UTC+2</option>
+              <option value="UTC+4">UTC+4</option>
+              <option value="UTC+8">UTC+8</option>
+              <option value="UTC-5">UTC-5</option>
+              <option value="UTC-8">UTC-8</option>
+            </select>
+          </div>
+
           {/* 6. Día y noche */}
           <button
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
@@ -806,8 +847,8 @@ Pregunta del usuario: ${messageText.trim()}`;
               theme={theme} chartPaneBackgroundColor={chartPaneBackgroundColor}
               volumePaneHeight={volumePaneHeight} showAiAnalysisDrawings={showAiAnalysisDrawings}
               wSignalColor={wSignalColor} wSignalOpacity={wSignalOpacity / 100}
-              showWSignals={showWSignals}
-              onHistoricalDataUpdate={handleHistoricalDataUpdate}
+              showWSignals={showWSignals} showLTFFibonacci={showLTFFibonacci}
+              timezone={timezone} onHistoricalDataUpdate={handleHistoricalDataUpdate}
             />
           </div>
         </div>
@@ -829,6 +870,8 @@ Pregunta del usuario: ${messageText.trim()}`;
               onClearChatHistory={handleClearChatHistory}
               theme={theme}
               apiKeyPresent={apiKeyPresent}
+              showLTFFibonacci={showLTFFibonacci}
+              onShowLTFFibonacciChange={setShowLTFFibonacci}
             />
           </div>
         </div>

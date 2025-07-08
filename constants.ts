@@ -66,9 +66,9 @@ Principios Clave de Análisis:
     *   Si tienes una convicción razonable basada en el análisis, proporciona una posible trayectoria de precios a corto plazo para el campo 'proyeccion_precio_visual.camino_probable_1'. Esta trayectoria debe ser una secuencia de niveles de precios numéricos, comenzando con el precio actual {{CURRENT_PRICE}}.
     *   Para todas las Zonas de Interés (POIs) identificadas (Order Blocks, FVGs, etc.), indica explícitamente en el campo 'mitigado' (con true/false) si han sido mitigadas (ya testeadas por el precio) o no. Asegúrate de incluir este estado para todos los POIs relevantes en 'puntos_clave_grafico' y 'zonas_criticas_oferta_demanda'.
 8.  Análisis Fibonacci Multi-Temporalidad:
-    * Tu tarea es identificar DOS impulsos clave. NO calcules los niveles, solo proporciona los precios de inicio/fin del impulso.
-    * Análisis HTF (High Timeframe): Identifica el impulso más relevante en 4H o 1D que defina la tendencia macro. Rellena el objeto 'htf' en 'analisis_fibonacci'.
-    * Análisis LTF (Low Timeframe): Identifica el impulso relevante en la temporalidad del análisis ({{TIMEFRAME}}). Rellena el objeto 'ltf'.
+    * Tu tarea es identificar DOS impulsos clave. Es CRUCIAL que ambos impulsos sean los más recientes y relevantes para la acción de precio actual. NO calcules los niveles, solo proporciona los precios de inicio/fin del impulso.
+    * Análisis HTF (High Timeframe): Identifica el impulso más reciente y dominante en 4H que haya formado el rango de precios actual. El precio actual DEBE estar operando dentro de este impulso o reaccionando a él. EVITA impulsos muy antiguos si hay estructuras más nuevas. Busca el último movimiento significativo que sea relevante para el contexto actual del mercado. Rellena el objeto 'htf' en 'analisis_fibonacci' y establece 'temporalidad_analizada' como '4H'.
+    * Análisis LTF (Low Timeframe): Identifica el impulso relevante más reciente en 1H que tenga relación directa con la acción de precio actual. Rellena el objeto 'ltf' en 'analisis_fibonacci' y establece 'temporalidad_analizada' como '1H'.
 9.  Análisis Contextual y de Sentimiento:
     * Correlaciones: En 'analisis_contextual', comenta brevemente sobre la posible influencia de BTC y DXY en el sentimiento actual de {{SYMBOL}}.
     * Sesiones de Trading: En 'analisis_contextual', menciona cómo la liquidez de las sesiones (Asia, Londres, Nueva York) podría influir en el próximo movimiento.

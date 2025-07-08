@@ -28,6 +28,8 @@ interface RealTimeTradingChartProps {
   wSignalColor: string; // Hex color string e.g. #FFD700
   wSignalOpacity: number; // Opacity from 0 to 1
   showWSignals: boolean; // New prop to control W-Signal visibility
+  showLTFFibonacci: boolean; // New prop to control 1H Fibonacci visibility
+  timezone: string; // New prop to control timezone display
   // 📝 Paso 1: Nueva prop para recibir los datos históricos
   onHistoricalDataUpdate: (data: MarketDataPoint[]) => void;
   // RSI and DeltaZoneSettings props removed
@@ -176,7 +178,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   dataSource, symbol: rawSymbol, timeframe: rawTimeframe, analysisResult,
   onLatestChartInfoUpdate, onChartLoadingStateChange, movingAverages, theme,
   chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-  wSignalColor, wSignalOpacity, showWSignals,
+  wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci, timezone,
   onHistoricalDataUpdate // 📝 Extraer la nueva prop
   // RSI and DeltaZone props removed
 }) => {
@@ -273,6 +275,27 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
         timeVisible: true,
         secondsVisible: apiTimeframe.includes('m'),
         // borderColor and textColor will be set by applyScaleStyles
+      },
+      localization: {
+        timeFormatter: (time: any) => {
+          const date = new Date(time * 1000);
+          const offsetMap: Record<string, number> = {
+            'UTC': 0,
+            'UTC+1': 1,
+            'UTC+2': 2,
+            'UTC+4': 4,
+            'UTC+8': 8,
+            'UTC-5': -5,
+            'UTC-8': -8
+          };
+          const offset = offsetMap[timezone] || 0;
+          date.setHours(date.getHours() + offset);
+          return date.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
       },
       rightPriceScale: {
         mode: PriceScaleMode.Logarithmic,
@@ -485,7 +508,6 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
     // Callbacks onLatestChartInfoUpdate, onChartLoadingStateChange are stable.
   ]);
 
-
   // Effect for updating MAs
   useEffect(() => {
     if (!chartRef.current || historicalData.length === 0) return;
@@ -517,31 +539,34 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   }, [movingAverages, historicalData]); // Re-run if MAs config or historical data changes
 
   // Effect for drawing analysis results
-  // Funciones para calcular niveles de Fibonacci
+  // VERSIÓN ACTUALIZADA: Filtra para mostrar solo los niveles más importantes
   const calculateFibonacciRetracements = (start: number, end: number) => {
     const diff = end - start;
     const isUptrend = end > start;
 
-    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0];
+    // Niveles de retroceso que queremos mostrar: 0.382, 0.5, 0.618 (y los extremos 0 y 1)
+    const keyLevels = [0, 0.382, 0.5, 0.618, 1.0];
 
-    return levels.map(level => ({
+    return keyLevels.map(level => ({
       level,
       price: isUptrend ? end - (diff * level) : start + (diff * level),
       label: `${(level * 100).toFixed(1)}%`
     }));
   };
 
+  // VERSIÓN ACTUALIZADA: Filtra para mostrar solo las extensiones más comunes
   const calculateFibonacciExtensions = (start: number, end: number, retracement: number) => {
     const diff = end - start;
     const isUptrend = end > start;
     const retracementDiff = retracement - end;
 
-    const levels = [1.272, 1.414, 1.618, 2.0, 2.618];
+    // Niveles de extensión que queremos mostrar: 1.272, 1.618 y 2.618
+    const keyLevels = [1.272, 1.618, 2.618];
 
-    return levels.map(level => ({
+    return keyLevels.map(level => ({
       level,
       price: isUptrend ? retracement + (Math.abs(retracementDiff) * level) : retracement - (Math.abs(retracementDiff) * level),
-      label: `${(level * 100).toFixed(1)}%`
+      label: `Ext ${(level * 100).toFixed(1)}%`
     }));
   };
 
@@ -561,20 +586,33 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
       const { puntos_clave_grafico, analisis_fibonacci } = analysisResult;
       const markers: SeriesMarker<Time>[] = [];
 
-      // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) ---
+      // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) CON MEJORA PARA LIQUIDEZ ---
+
+      // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) CON MEJORA PARA LIQUIDEZ ---
       puntos_clave_grafico?.forEach(point => {
-        const color = getStrokeColor(point.tipo);
+        const defaultColor = getStrokeColor(point.tipo);
 
         if (point.nivel != null) {
-          const line = currentSeries.createPriceLine({
+          // --- INICIO DE LA MEJORA PARA LIQUIDEZ ---
+          const isLiquidity = point.tipo === AnalysisPointType.LIQUIDEZ_COMPRADORA ||
+            point.tipo === AnalysisPointType.LIQUIDEZ_VENDEDORA;
+
+          const lineOptions = {
             price: point.nivel,
-            color,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
+            // Usamos un color dorado y llamativo específicamente para la liquidez
+            color: isLiquidity ? '#FFD700' : defaultColor,
+            // Hacemos la línea más gruesa para que destaque (usando as LineWidth para evitar error de tipos)
+            lineWidth: (isLiquidity ? 2 : 1) as any,
+            // Usamos un estilo punteado para diferenciarla de otras líneas estructurales
+            lineStyle: isLiquidity ? LineStyle.Dotted : LineStyle.Dashed,
             axisLabelVisible: true,
-            title: point.label
-          });
+            // Añadimos un icono de dólar 💲 para que sea inconfundible
+            title: isLiquidity ? `💲 ${point.label}` : point.label,
+          };
+
+          const line = currentSeries.createPriceLine(lineOptions);
           analysisPriceLinesRef.current.push(line);
+          // --- FIN DE LA MEJORA ---
         } else if (point.zona) {
           const [minPrice, maxPrice] = point.zona;
           const isFvg = point.tipo === AnalysisPointType.FVG_ALCISTA || point.tipo === AnalysisPointType.FVG_BAJISTA;
@@ -656,7 +694,8 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           });
         }
 
-        if (analisis_fibonacci.ltf) {
+        // Solo dibujar LTF (1H) si showLTFFibonacci está activado
+        if (analisis_fibonacci.ltf && showLTFFibonacci) {
           drawFiboForImpulse(analisis_fibonacci.ltf, {
             color: fiboColors.fiboExtension,
             lineStyle: LineStyle.Dotted
@@ -695,7 +734,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
         }
       }
     }
-  }, [analysisResult, showAiAnalysisDrawings, theme, wSignalColor, wSignalOpacity, showWSignals]); // Redraw if result, visibility, data, or W-Signal style/visibility changes
+  }, [analysisResult, showAiAnalysisDrawings, theme, wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci, rawTimeframe]); // Redraw if result, visibility, data, style changes, or timeframe changes
 
   // Effect for managing pane heights (only volume now)
   useEffect(() => {

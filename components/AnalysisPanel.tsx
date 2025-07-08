@@ -15,6 +15,8 @@ interface AnalysisPanelProps {
   onClearChatHistory: () => void;
   theme: 'dark' | 'light';
   apiKeyPresent: boolean;
+  showLTFFibonacci: boolean;
+  onShowLTFFibonacciChange: (show: boolean) => void;
 }
 
 const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }: { children: React.ReactNode }) => (
@@ -111,8 +113,8 @@ const TradeSetupDisplay: React.FC<{ setup: TradeSetup | undefined; }> = ({
               Calificación: {setup.calificacion_setup.calificacion}
             </span>
             <div className={`px-2 py-0.5 rounded text-xs font-bold ${setup.calificacion_setup.calificacion === 'A' ? 'bg-green-500/20 text-green-400' :
-                setup.calificacion_setup.calificacion === 'B' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
+              setup.calificacion_setup.calificacion === 'B' ? 'bg-yellow-500/20 text-yellow-400' :
+                'bg-red-500/20 text-red-400'
               }`}>
               {setup.calificacion_setup.calificacion === 'A' ? 'ALTA PROBABILIDAD' :
                 setup.calificacion_setup.calificacion === 'B' ? 'PROBABILIDAD MEDIA' :
@@ -154,7 +156,7 @@ const TradeSetupDisplay: React.FC<{ setup: TradeSetup | undefined; }> = ({
 
 const FibonacciLevelDisplay: React.FC<{ level: FibonacciLevel }> = ({ level }: { level: FibonacciLevel }) => (
   <li className="text-xs">
-    <span className="font-medium text-slate-200">{level.label}:</span> ${level.price.toFixed(Math.abs(level.price) < 1 ? 4 : 2)}
+    <span className="font-medium text-slate-200">{level.label}:</span> ${level.price != null ? level.price.toFixed(Math.abs(level.price) < 1 ? 4 : 2) : 'N/A'}
   </li>
 );
 
@@ -174,16 +176,16 @@ const SingleFibonacciImpulse: React.FC<{
   const retracementLevels = calculateFibonacciRetracements(
     precio_inicio_impulso,
     precio_fin_impulso,
-    [0.236, 0.382, 0.5, 0.618, 0.786]
-  );
+    [0.382, 0.5, 0.618, 0.78]
+  ).filter(level => level.price != null && !isNaN(level.price));
 
   const extensionLevels = precio_fin_retroceso != null
     ? calculateFibonacciExtensions(
       precio_inicio_impulso,
       precio_fin_impulso,
       precio_fin_retroceso,
-      [1.272, 1.414, 1.618, 2.618]
-    )
+      [1.272, 1.618, 2.618]
+    ).filter(level => level.price != null && !isNaN(level.price))
     : [];
 
   const isUpwardImpulse = precio_fin_impulso > precio_inicio_impulso;
@@ -199,8 +201,8 @@ const SingleFibonacciImpulse: React.FC<{
       <h4 className="text-sm font-semibold text-sky-300">{title} ({temporalidad_analizada})</h4>
       <p className="text-xs text-slate-300"><span className="font-medium text-slate-100">Impulso:</span> {descripcion_impulso}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 text-xs">
-        <DetailItem label="Inicio (A)" value={`$${precio_inicio_impulso.toFixed(Math.abs(precio_inicio_impulso) < 1 ? 4 : 2)}`} />
-        <DetailItem label="Fin (B)" value={`$${precio_fin_impulso.toFixed(Math.abs(precio_fin_impulso) < 1 ? 4 : 2)}`} />
+        <DetailItem label="Inicio (A)" value={precio_inicio_impulso != null ? `$${precio_inicio_impulso.toFixed(Math.abs(precio_inicio_impulso) < 1 ? 4 : 2)}` : 'N/A'} />
+        <DetailItem label="Fin (B)" value={precio_fin_impulso != null ? `$${precio_fin_impulso.toFixed(Math.abs(precio_fin_impulso) < 1 ? 4 : 2)}` : 'N/A'} />
         {precio_fin_retroceso != null && (
           <DetailItem label="Retroceso (C)" value={`$${precio_fin_retroceso.toFixed(Math.abs(precio_fin_retroceso) < 1 ? 4 : 2)}`} />
         )}
@@ -227,25 +229,91 @@ const SingleFibonacciImpulse: React.FC<{
   );
 };
 
-// COMPONENTE PRINCIPAL ACTUALIZADO
-const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | undefined }> = ({ fiboAnalysis }) => {
-  if (!fiboAnalysis || (!fiboAnalysis.htf && !fiboAnalysis.ltf)) {
+// COMPONENTE PRINCIPAL ACTUALIZADO - Fibonacci con toggle para 1H y prevención de duplicados
+const FibonacciAnalysisDisplay: React.FC<{
+  fiboAnalysis: FibonacciAnalysis | undefined;
+  showLTFFibonacci: boolean;
+  onShowLTFFibonacciChange: (show: boolean) => void;
+}> = ({ fiboAnalysis, showLTFFibonacci, onShowLTFFibonacciChange }) => {
+
+  if (!fiboAnalysis) {
     return <p className="text-xs sm:text-sm text-slate-400 italic">Análisis Fibonacci no disponible.</p>;
   }
 
+  const hasHTF = fiboAnalysis.htf != null;
+  const hasLTF = fiboAnalysis.ltf != null;
+
+  if (!hasHTF && !hasLTF) {
+    return <p className="text-xs sm:text-sm text-slate-400 italic">Análisis Fibonacci no disponible.</p>;
+  }
+
+  // Función para detectar si HTF y LTF son duplicados (mismo timeframe y puntos similares)
+  const areAnalysesDuplicated = (htf: FibonacciImpulseAnalysis, ltf: FibonacciImpulseAnalysis): boolean => {
+    if (!htf || !ltf) return false;
+
+    // Si ambos tienen la misma temporalidad, son duplicados
+    if (htf.temporalidad_analizada === ltf.temporalidad_analizada) return true;
+
+    // Si los puntos de inicio y fin son muy similares (diferencia < 1%), son duplicados
+    const startDiff = Math.abs(htf.precio_inicio_impulso - ltf.precio_inicio_impulso);
+    const endDiff = Math.abs(htf.precio_fin_impulso - ltf.precio_fin_impulso);
+    const avgPrice = (htf.precio_inicio_impulso + htf.precio_fin_impulso) / 2;
+
+    return (startDiff / avgPrice < 0.01) && (endDiff / avgPrice < 0.01);
+  };
+
+  // Detectar duplicados
+  const isDuplicated = hasHTF && hasLTF && areAnalysesDuplicated(fiboAnalysis.htf!, fiboAnalysis.ltf!);
+
+  // Lógica mejorada para mostrar toggle solo cuando realmente hay HTF (4H) y LTF (1H) diferentes
+  const shouldShowToggle = hasHTF && hasLTF && !isDuplicated &&
+    fiboAnalysis.htf?.temporalidad_analizada === '4H' &&
+    fiboAnalysis.ltf?.temporalidad_analizada === '1H';
+
+  const shouldShowLTF = hasLTF && (!hasHTF || (!isDuplicated && showLTFFibonacci));
+
   return (
     <div className="space-y-2 mt-1 p-2 bg-slate-700 rounded-md">
-      {fiboAnalysis.htf && (
+      {/* Siempre mostrar HTF si está disponible */}
+      {hasHTF && fiboAnalysis.htf && (
         <SingleFibonacciImpulse
-          title="Análisis Macro"
+          title={`Análisis Macro (${fiboAnalysis.htf.temporalidad_analizada || 'HTF'})`}
           impulseAnalysis={fiboAnalysis.htf}
         />
       )}
-      {fiboAnalysis.ltf && (
+
+      {/* Toggle para LTF solo si tenemos ambos y NO son duplicados */}
+      {shouldShowToggle && (
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-600">
+          <span className="text-xs text-slate-300">
+            Mostrar Fibonacci 1H
+          </span>
+          <button
+            onClick={() => onShowLTFFibonacciChange(!showLTFFibonacci)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${showLTFFibonacci ? 'bg-sky-600' : 'bg-slate-600'
+              }`}
+          >
+            <span
+              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-200 ease-in-out ${showLTFFibonacci ? 'translate-x-5' : 'translate-x-1'
+                }`}
+            />
+          </button>
+        </div>
+      )}
+
+      {/* Mostrar LTF si debe mostrarse y no es duplicado */}
+      {shouldShowLTF && fiboAnalysis.ltf && (
         <SingleFibonacciImpulse
-          title="Análisis de Temporalidad Actual"
+          title={`Análisis de Temporalidad Actual (${fiboAnalysis.ltf.temporalidad_analizada || 'LTF'})`}
           impulseAnalysis={fiboAnalysis.ltf}
         />
+      )}
+
+      {/* Mensaje informativo si se detectan duplicados */}
+      {isDuplicated && (
+        <div className="text-xs text-slate-400 italic mt-2 p-2 bg-slate-800 rounded border border-slate-600">
+          ℹ️ Se detectó el mismo análisis en ambas temporalidades. Mostrando solo el análisis macro.
+        </div>
       )}
     </div>
   );
@@ -263,6 +331,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   onClearChatHistory,
   theme,
   apiKeyPresent,
+  showLTFFibonacci,
+  onShowLTFFibonacciChange,
 }) => {
   const [chatInputValue, setChatInputValue] = useState('');
   const chatMessagesEndRef = useRef<HTMLDivElement>(null);
@@ -355,10 +425,10 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                   {opportunities.map((opp, idx) => (
                     <div key={idx} className={`p-2 rounded-lg border text-xs ${opp.style === 'scalping' ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400' :
-                        opp.style === 'intradia' ? 'bg-cyan-400/10 border-cyan-400/30 text-cyan-400' :
-                          opp.style === 'swing' ? 'bg-purple-400/10 border-purple-400/30 text-purple-400' :
-                            opp.style === 'largo_plazo' ? 'bg-orange-400/10 border-orange-400/30 text-orange-400' :
-                              'bg-slate-600/10 border-slate-400/30 text-slate-300'
+                      opp.style === 'intradia' ? 'bg-cyan-400/10 border-cyan-400/30 text-cyan-400' :
+                        opp.style === 'swing' ? 'bg-purple-400/10 border-purple-400/30 text-purple-400' :
+                          opp.style === 'largo_plazo' ? 'bg-orange-400/10 border-orange-400/30 text-orange-400' :
+                            'bg-slate-600/10 border-slate-400/30 text-slate-300'
                       }`}>
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className="text-sm">{styleIcons[opp.style] || styleIcons.sin_clasificar}</span>
@@ -428,34 +498,38 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <p className={`text-xs sm:text-sm font-semibold ${activeSignalColorClass}`}>
             {activeSignalType && activeSignalType !== "ninguno" ? activeSignalType.toUpperCase() : "NINGUNA"}
           </p>
-          {analysisResult.proyeccion_precio_visual && (analysisResult.proyeccion_precio_visual.camino_probable_1 || analysisResult.proyeccion_precio_visual.descripcion_camino_1) && (
+          {analysisResult?.proyeccion_precio_visual && (analysisResult.proyeccion_precio_visual.camino_probable_1 || analysisResult.proyeccion_precio_visual.descripcion_camino_1) && (
             <> <SectionTitle>Proyección de Precio</SectionTitle>
               {analysisResult.proyeccion_precio_visual.descripcion_camino_1 && <p className="text-xs sm:text-sm text-slate-300 mb-1">{analysisResult.proyeccion_precio_visual.descripcion_camino_1}</p>}
               {analysisResult.proyeccion_precio_visual.camino_probable_1 && (
-                <p className="text-xs text-slate-400">Ruta: {analysisResult.proyeccion_precio_visual.camino_probable_1.map(p => typeof p === 'number' ? `$${p.toFixed(Math.abs(p) < 1 ? 4 : 2)}` : p).join(' → ')}</p>
+                <p className="text-xs text-slate-400">Ruta: {analysisResult.proyeccion_precio_visual.camino_probable_1.map(p => typeof p === 'number' && p != null ? `$${p.toFixed(Math.abs(p) < 1 ? 4 : 2)}` : p).join(' → ')}</p>
               )} </>)}
           <SectionTitle>Configuración de Trade Recomendada</SectionTitle>
-          <TradeSetupDisplay setup={analysisResult.conclusion_recomendacion?.mejor_oportunidad_actual} />        <SectionTitle>Análisis Fibonacci</SectionTitle>
-          <FibonacciAnalysisDisplay fiboAnalysis={analysisResult.analisis_fibonacci} />
+          <TradeSetupDisplay setup={analysisResult?.conclusion_recomendacion?.mejor_oportunidad_actual} />          <SectionTitle>Análisis Fibonacci</SectionTitle>
+          <FibonacciAnalysisDisplay
+            fiboAnalysis={analysisResult?.analisis_fibonacci}
+            showLTFFibonacci={showLTFFibonacci}
+            onShowLTFFibonacciChange={onShowLTFFibonacciChange}
+          />
         </>
         {/* Nueva sección de análisis contextual */}
-        {analysisResult.analisis_contextual && (
+        {analysisResult?.analisis_contextual && (
           <>
             <SectionTitle>Análisis Contextual</SectionTitle>
             <div className="space-y-1.5 mt-1.5 p-2 bg-slate-700 rounded-md">
-              {analysisResult.analisis_contextual.correlacion_mercado && (
+              {analysisResult.analisis_contextual?.correlacion_mercado && (
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mb-1">Correlaciones de Mercado:</h4>
                   <p className="text-xs text-slate-300">{analysisResult.analisis_contextual.correlacion_mercado}</p>
                 </div>
               )}
-              {analysisResult.analisis_contextual.liquidez_sesiones && (
+              {analysisResult.analisis_contextual?.liquidez_sesiones && (
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mb-1">Liquidez de Sesiones:</h4>
                   <p className="text-xs text-slate-300">{analysisResult.analisis_contextual.liquidez_sesiones}</p>
                 </div>
               )}
-              {analysisResult.analisis_contextual.comentario_funding_rate_oi && (
+              {analysisResult.analisis_contextual?.comentario_funding_rate_oi && (
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mb-1">Funding Rate y Open Interest:</h4>
                   <p className="text-xs text-slate-300">{analysisResult.analisis_contextual.comentario_funding_rate_oi}</p>
@@ -464,18 +538,18 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
           </>
         )}
-        {analysisResult.puntos_clave_grafico && analysisResult.puntos_clave_grafico.length > 0 && (
+        {analysisResult?.puntos_clave_grafico && analysisResult.puntos_clave_grafico.length > 0 && (
           <> <SectionTitle>Niveles y Zonas Clave Identificados</SectionTitle>
             <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-slate-300 mt-1.5 sm:mt-2 p-1.5 sm:p-2 bg-slate-700 rounded-md">
               {analysisResult.puntos_clave_grafico.map((point, index) => (
                 <li key={index}>
-                  <span className="font-medium text-slate-100">{point.label}</span>
-                  {point.tipo && <span className="text-xs text-slate-400"> ({point.tipo.replace(/_/g, ' ')})</span>}
-                  {point.zona && <span className="text-xs text-slate-400"> [$${point.zona[0].toFixed(Math.abs(point.zona[0]) < 1 ? 4 : 2)} - $${point.zona[1].toFixed(Math.abs(point.zona[1]) < 1 ? 4 : 2)}]</span>}
-                  {point.nivel != null && <span className="text-xs text-slate-400"> @ ${typeof point.nivel === 'number' ? point.nivel.toFixed(Math.abs(point.nivel) < 1 ? 4 : 2) : point.nivel}</span>}
-                  {point.temporalidad && <span className="text-xs text-slate-500"> ({point.temporalidad})</span>}
-                  {(point.tipo === AnalysisPointType.POI_DEMANDA || point.tipo === AnalysisPointType.POI_OFERTA) && point.mitigado && <span className="text-xs text-sky-300"> (Mitigado)</span>}
-                  {point.importancia && <span className="text-xs text-yellow-400"> Importancia: {point.importancia}</span>}
+                  <span className="font-medium text-slate-100">{point?.label || 'Nivel sin nombre'}</span>
+                  {point?.tipo && <span className="text-xs text-slate-400"> ({point.tipo.replace(/_/g, ' ')})</span>}
+                  {point?.zona && point.zona[0] != null && point.zona[1] != null && <span className="text-xs text-slate-400"> [$${point.zona[0].toFixed(Math.abs(point.zona[0]) < 1 ? 4 : 2)} - $${point.zona[1].toFixed(Math.abs(point.zona[1]) < 1 ? 4 : 2)}]</span>}
+                  {point?.nivel != null && <span className="text-xs text-slate-400"> @ ${typeof point.nivel === 'number' ? point.nivel.toFixed(Math.abs(point.nivel) < 1 ? 4 : 2) : point.nivel}</span>}
+                  {point?.temporalidad && <span className="text-xs text-slate-500"> ({point.temporalidad})</span>}
+                  {(point?.tipo === AnalysisPointType.POI_DEMANDA || point?.tipo === AnalysisPointType.POI_OFERTA) && point?.mitigado && <span className="text-xs text-sky-300"> (Mitigado)</span>}
+                  {point?.importancia && <span className="text-xs text-yellow-400"> Importancia: {point.importancia}</span>}
                 </li>))} </ul> </>)}
         <SectionTitle>Estructura General de Mercado y Volumen</SectionTitle>
         {analysisResult.analisis_general?.estructura_mercado_resumen && Object.entries(analysisResult.analisis_general.estructura_mercado_resumen).map(([tf, desc]) =>
