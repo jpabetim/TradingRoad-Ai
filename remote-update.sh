@@ -23,15 +23,18 @@ fi
 chmod 400 "$KEY_FILE"
 
 echo "📤 Enviando scripts al servidor..."
-scp -i "$KEY_FILE" update-server.sh verify-server.sh $EC2_USER@$EC2_HOST:/tmp/
+scp -i "$KEY_FILE" update-server.sh verify-server.sh fix-bundle.sh $EC2_USER@$EC2_HOST:/tmp/
 
 echo "🔧 Otorgando permisos de ejecución a los scripts..."
-ssh -i "$KEY_FILE" $EC2_USER@$EC2_HOST "chmod +x /tmp/update-server.sh /tmp/verify-server.sh"
+ssh -i "$KEY_FILE" $EC2_USER@$EC2_HOST "chmod +x /tmp/update-server.sh /tmp/verify-server.sh /tmp/fix-bundle.sh"
 
 echo "🔄 Ejecutando script de actualización..."
 ssh -i "$KEY_FILE" $EC2_USER@$EC2_HOST "cd /var/www && sudo /tmp/update-server.sh"
 
-echo "🔍 Ejecutando script de verificación..."
+echo "� Ejecutando script de corrección de bundle..."
+ssh -i "$KEY_FILE" $EC2_USER@$EC2_HOST "cd /var/www && sudo /tmp/fix-bundle.sh"
+
+echo "�🔍 Ejecutando script de verificación..."
 ssh -i "$KEY_FILE" $EC2_USER@$EC2_HOST "cd /var/www && sudo /tmp/verify-server.sh"
 
 echo ""
