@@ -1,5 +1,3 @@
-
-
 export interface MarketDataPoint {
   time: number; // Unix timestamp (seconds) for Lightweight Charts
   open: number;
@@ -7,6 +5,55 @@ export interface MarketDataPoint {
   low: number;
   close: number;
   volume?: number;
+}
+
+// Moving Average Configuration
+export interface MovingAverageConfig {
+  id: string;
+  type: 'MA' | 'EMA';
+  period: number;
+  color: string;
+  visible: boolean;
+}
+
+// 🆕 Interfaces para el Sistema de Plantillas
+export interface ChartTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string; // ISO string
+  lastModified: string; // ISO string
+  isDefault?: boolean; // Marca si es la plantilla por defecto
+  configuration: {
+    // Configuración de Medias Móviles
+    movingAverages: MovingAverageConfig[];
+
+    // Configuración Visual
+    theme: 'dark' | 'light';
+    chartPaneBackgroundColor: string;
+    volumePaneHeight: number;
+
+    // Configuración de W-Signals
+    wSignalColor: string;
+    wSignalOpacity: number;
+    showWSignals: boolean;
+
+    // Configuración de Análisis IA
+    showAiAnalysisDrawings: boolean;
+
+    // Temporalidades Favoritas
+    favoriteTimeframes: string[];
+
+    // Configuración por defecto de símbolo y exchange
+    defaultDataSource?: DataSource;
+    defaultSymbol?: string;
+    defaultTimeframe?: string;
+  };
+}
+
+export interface TemplateManager {
+  templates: ChartTemplate[];
+  activeTemplateId: string | null;
 }
 
 export enum AnalysisPointType {
@@ -57,13 +104,17 @@ export interface AnalysisPoint {
 
 export interface TradeSetup {
   tipo: "largo" | "corto" | "ninguno";
+  estilo_trade?: "scalping" | "intradia" | "swing" | "largo_plazo"; // NUEVO: Clasificación por estilo de trading
+  calificacion_setup?: SetupCalification; // Nueva: calificación y confluencias
   descripcion_entrada?: string; // Detailed entry condition: "Esperar mitigación de POI Demanda y ChoCh en LTF"
   punto_entrada_ideal?: number; // Specific entry price, if applicable
   zona_entrada?: [number, number]; // Entry zone [min, max]
   stop_loss: number;
+  gestion_stop_loss?: string; // Nueva: lógica del stop loss
   take_profit_1: number;
   take_profit_2?: number;
   take_profit_3?: number;
+  gestion_take_profit?: string; // Nueva: lógica del take profit
   razon_fundamental: string; // Why this setup is good
   confirmaciones_adicionales?: string[]; // e.g., ["RSI Divergence", "Volume Spike"]
   ratio_riesgo_beneficio?: string; // e.g., "1:3"
@@ -84,13 +135,26 @@ export interface FibonacciLevel {
   label: string; // e.g., "Retracement 61.8% (0.618)", "Extension 161.8% (1.618)"
 }
 
+// Nueva interfaz para un único análisis de impulso
+export interface FibonacciImpulseAnalysis {
+  temporalidad_analizada: string;
+  descripcion_impulso: string;
+  precio_inicio_impulso: number;
+  precio_fin_impulso: number;
+  precio_fin_retroceso?: number | null;
+}
+
+// Nueva interfaz para calificación del setup
+export interface SetupCalification {
+  calificacion: "A" | "B" | "C";
+  confluencias: string[];
+}
+
 export interface FibonacciAnalysis {
-  descripcion_impulso: string; // e.g., "Impulso alcista desde $100 a $150 tras BOS en 1H."
-  precio_inicio_impulso: number; // Price at point A
-  precio_fin_impulso: number;    // Price at point B
-  precio_fin_retroceso?: number;   // Price at point C (end of retracement from B, for extension calculation)
-  niveles_retroceso?: FibonacciLevel[]; // Optional - will be calculated automatically in JS
-  niveles_extension?: FibonacciLevel[]; // Optional - will be calculated automatically in JS
+  htf?: FibonacciImpulseAnalysis; // Análisis de Alta Temporalidad
+  ltf?: FibonacciImpulseAnalysis; // Análisis de la temporalidad actual
+  niveles_retroceso?: FibonacciLevel[]; // Fibonacci retracement levels
+  niveles_extension?: FibonacciLevel[]; // Fibonacci extension levels
 }
 
 export interface GeminiAnalysisResult {
@@ -110,6 +174,11 @@ export interface GeminiAnalysisResult {
     comentario_volumen?: string; // e.g., "Volumen decreciente en el retroceso, sugiere debilidad vendedora."
     interpretacion_volumen_detallada?: string; // Added for detailed volume analysis by AI
     comentario_funding_rate_oi?: string; // New: For FR/OI conceptual analysis
+  };
+  analisis_contextual?: { // Nueva sección de análisis contextual
+    correlacion_mercado?: string;
+    liquidez_sesiones?: string;
+    comentario_funding_rate_oi?: string;
   };
   puntos_clave_grafico: AnalysisPoint[];
   liquidez_importante: {
@@ -151,13 +220,13 @@ export interface GeminiRequestPayload {
 export type DataSource = 'binance' | 'bingx';
 
 export interface TickerData {
-    provider: DataSource;
-    symbol: string;
-    price?: number;
-    changePercent?: number;
-    volume?: number; // Volume in base currency
-    quoteVolume?: number; // Volume in quote currency
-    lastPriceChange?: 'up' | 'down' | 'none';
+  provider: DataSource;
+  symbol: string;
+  price?: number;
+  changePercent?: number;
+  volume?: number; // Volume in base currency
+  quoteVolume?: number; // Volume in quote currency
+  lastPriceChange?: 'up' | 'down' | 'none';
 }
 
 // For Lightweight Charts
@@ -179,13 +248,4 @@ export interface ChartHistogramData {
   time: number; // UTCTimestamp
   value: number;
   color?: string;
-}
-
-// Configuration for Moving Averages
-export interface MovingAverageConfig {
-  id: string; // Unique ID, e.g., 'ma1', 'ema2'
-  type: 'MA' | 'EMA'; // Type of moving average
-  period: number;
-  color: string;
-  visible: boolean;
 }

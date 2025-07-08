@@ -3,15 +3,17 @@ import RealTimeTradingChart from './components/RealTimeTradingChart';
 import AnalysisPanel from './components/AnalysisPanel';
 import ApiKeyMessage from './components/ApiKeyMessage';
 import DisplaySettingsDialog from './components/DisplaySettingsDialog';
-import { GeminiAnalysisResult, DataSource, MovingAverageConfig, MarketDataPoint } from './types';
+import TemplateManager from './components/TemplateManager';
+import { GeminiAnalysisResult, DataSource, MovingAverageConfig, MarketDataPoint, ChartTemplate } from './types';
 import { analyzeChartWithGemini, ExtendedGeminiRequestPayload } from './services/geminiService';
-import { DEFAULT_SYMBOL, DEFAULT_TIMEFRAME, DEFAULT_DATA_SOURCE, CHAT_SYSTEM_PROMPT_TEMPLATE, GEMINI_MODEL_NAME, AVAILABLE_DATA_SOURCES, AVAILABLE_SYMBOLS_BINANCE, AVAILABLE_SYMBOLS_BINGX, QUICK_SELECT_TIMEFRAMES } from './constants';
+import { DEFAULT_SYMBOL, DEFAULT_TIMEFRAME, DEFAULT_DATA_SOURCE, CHAT_SYSTEM_PROMPT_TEMPLATE, GEMINI_MODEL_NAME, AVAILABLE_DATA_SOURCES, AVAILABLE_SYMBOLS_BINANCE, AVAILABLE_SYMBOLS_BINGX, QUICK_SELECT_TIMEFRAMES, DEFAULT_FAVORITE_TIMEFRAMES } from './constants';
 import { GoogleGenAI, Chat } from "@google/genai";
+import { useTemplateManager, TemplateConfiguration } from './hooks/useTemplateManager';
 
 // Helper for debouncing
 function debounce<T extends (...args: any[]) => void>(func: T, delay: number): (...args: Parameters<T>) => void {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  return function(this: ThisParameterType<T>, ...args: Parameters<T>) {
+  return function (this: ThisParameterType<T>, ...args: Parameters<T>) {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
@@ -89,9 +91,10 @@ const App: React.FC = () => {
   const [actualSymbol, setActualSymbol] = useState<string>(consistentInitialSymbol);
   const [symbolInput, setSymbolInput] = useState<string>(consistentInitialSymbol);
   const [timeframe, setTimeframe] = useState<string>(() => getLocalStorageItem('traderoad_timeframe', DEFAULT_TIMEFRAME));
+  const [favoriteTimeframes, setFavoriteTimeframes] = useState<string[]>(() => getLocalStorageItem('traderoad_favoriteTimeframes', DEFAULT_FAVORITE_TIMEFRAMES));
   const [theme, setTheme] = useState<Theme>(() => getLocalStorageItem('traderoad_theme', 'dark'));
   const [movingAverages, setMovingAverages] = useState<MovingAverageConfig[]>(() => getLocalStorageItem('traderoad_movingAverages', initialMAs));
-  
+
   const initialBgColorBasedOnTheme = theme === 'dark' ? INITIAL_DARK_CHART_PANE_BACKGROUND_COLOR : INITIAL_LIGHT_CHART_PANE_BACKGROUND_COLOR;
   const [chartPaneBackgroundColor, setChartPaneBackgroundColor] = useState<string>(() =>
     getLocalStorageItem('traderoad_chartPaneBackgroundColor', initialBgColorBasedOnTheme)
@@ -105,16 +108,21 @@ const App: React.FC = () => {
 
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyPresent, setApiKeyPresent] = useState<boolean>(false);
-  const [displaySettingsDialogOpen, setDisplaySettingsDialogOpen] = useState<boolean>(false); 
+  const [displaySettingsDialogOpen, setDisplaySettingsDialogOpen] = useState<boolean>(false);
 
   const [analysisResult, setAnalysisResult] = useState<GeminiAnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  
+
   const [latestChartInfo, setLatestChartInfo] = useState<LatestChartInfo>({ price: null, volume: null });
   const [isChartLoading, setIsChartLoading] = useState<boolean>(true);
 
   const [analysisPanelMode, setAnalysisPanelMode] = useState<AnalysisPanelMode>('initial');
+
+  // 🆕 Sistema de Gestión de Plantillas
+  const templateManager = useTemplateManager();
+  const [showTemplateManager, setShowTemplateManager] = useState<boolean>(false);
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -128,6 +136,7 @@ const App: React.FC = () => {
       localStorage.setItem('traderoad_dataSource', JSON.stringify(dataSource));
       localStorage.setItem('traderoad_actualSymbol', JSON.stringify(actualSymbol));
       localStorage.setItem('traderoad_timeframe', JSON.stringify(timeframe));
+      localStorage.setItem('traderoad_favoriteTimeframes', JSON.stringify(favoriteTimeframes));
       localStorage.setItem('traderoad_theme', JSON.stringify(theme));
       localStorage.setItem('traderoad_movingAverages', JSON.stringify(movingAverages));
       localStorage.setItem('traderoad_chartPaneBackgroundColor', JSON.stringify(chartPaneBackgroundColor));
@@ -138,7 +147,7 @@ const App: React.FC = () => {
       localStorage.setItem('traderoad_showWSignals', JSON.stringify(showWSignals));
     }
   }, [
-    dataSource, actualSymbol, timeframe, theme, movingAverages,
+    dataSource, actualSymbol, timeframe, favoriteTimeframes, theme, movingAverages,
     chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
     wSignalColor, wSignalOpacity, showWSignals
   ]);
@@ -184,7 +193,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (apiKeyPresent) { // Only attempt to initialize if API key is marked as present
-        initializeChatSession();
+      initializeChatSession();
     }
   }, [apiKeyPresent, initializeChatSession]);
 
@@ -194,26 +203,27 @@ const App: React.FC = () => {
       const consistentTypedSymbol = getConsistentSymbolForDataSource(newSymbol.trim(), dataSource);
       setActualSymbol(consistentTypedSymbol);
       if (consistentTypedSymbol !== newSymbol.trim()) {
-         setSymbolInput(consistentTypedSymbol); 
+        setSymbolInput(consistentTypedSymbol);
       }
     }, 750),
-    [dataSource] 
+    [dataSource]
   );
 
   const handleSymbolInputChange = (newInputValue: string) => {
     setSymbolInput(newInputValue.toUpperCase());
     debouncedSetActualSymbol(newInputValue.toUpperCase());
   };
-  
+
   useEffect(() => {
     if (symbolInput !== actualSymbol) {
-        setSymbolInput(actualSymbol);
+      setSymbolInput(actualSymbol);
     }
   }, [actualSymbol]);
 
 
   useEffect(() => {
-    setAnalysisResult(null); 
+    // Only clear analysis when symbol or data source changes, not on timeframe changes
+    setAnalysisResult(null);
     setAnalysisError(null);
     setAnalysisPanelMode('initial'); // Reset to initial to avoid showing stale analysis for new symbol
   }, [actualSymbol, dataSource]);
@@ -228,9 +238,9 @@ const App: React.FC = () => {
     const isCurrentBgThemeDefault =
       chartPaneBackgroundColor === INITIAL_DARK_CHART_PANE_BACKGROUND_COLOR ||
       chartPaneBackgroundColor === INITIAL_LIGHT_CHART_PANE_BACKGROUND_COLOR;
-    
+
     if (isCurrentBgThemeDefault && chartPaneBackgroundColor !== newThemeDefaultBgColor) {
-        setChartPaneBackgroundColor(newThemeDefaultBgColor);
+      setChartPaneBackgroundColor(newThemeDefaultBgColor);
     }
   }, [theme, chartPaneBackgroundColor]);
 
@@ -242,7 +252,7 @@ const App: React.FC = () => {
     setHistoricalData(data.slice(-200)); // Usamos slice para quedarnos con las últimas 200 velas
   }, []);
 
-  const handleRequestAnalysis = useCallback(async () => {
+  const handleRequestAnalysis = useCallback(async (forceRegenerate: boolean = false) => {
     if (!apiKey) {
       setAnalysisError("Clave API no configurada. El análisis no puede proceder.");
       setAnalysisPanelMode('analysis');
@@ -254,22 +264,24 @@ const App: React.FC = () => {
       return;
     }
 
-    // If switching TO analysis mode AND a result exists for the current context, just show it.
-    if (analysisPanelMode !== 'analysis' && analysisResult) {
+    const displaySymbolForAI = actualSymbol.includes('-') ? actualSymbol.replace('-', '/') : (actualSymbol.endsWith('USDT') ? actualSymbol.replace(/USDT$/, '/USDT') : actualSymbol);
+
+    // 🔥 MEJORA: Verificar si ya existe un análisis válido para evitar regeneración innecesaria
+    if (!forceRegenerate && analysisResult &&
+      analysisResult.analisis_general?.simbolo === displaySymbolForAI &&
+      analysisResult.analisis_general?.temporalidad_principal_analisis === timeframe.toUpperCase()) {
+      // Ya tenemos un análisis válido para este símbolo y temporalidad, solo mostrar el panel
       setAnalysisPanelMode('analysis');
-      setAnalysisLoading(false); // Ensure loading is off if we're just switching views
-      setAnalysisError(null);
       return;
     }
 
-    // Otherwise (already in analysis mode OR no result exists), fetch new analysis.
+    // Solo regenerar análisis cuando es necesario o explícitamente solicitado
     setAnalysisLoading(true);
     setAnalysisError(null);
     setAnalysisResult(null); // Clear previous result before fetching new one
     setAnalysisPanelMode('analysis'); // Ensure mode is set
 
     try {
-      const displaySymbolForAI = actualSymbol.includes('-') ? actualSymbol.replace('-', '/') : (actualSymbol.endsWith('USDT') ? actualSymbol.replace(/USDT$/, '/USDT') : actualSymbol);
       const payload: ExtendedGeminiRequestPayload = {
         symbol: displaySymbolForAI, timeframe: timeframe.toUpperCase(), currentPrice: latestChartInfo.price,
         marketContextPrompt: "Context will be generated by getFullAnalysisPrompt",
@@ -283,25 +295,25 @@ const App: React.FC = () => {
     } finally {
       setAnalysisLoading(false);
     }
-  }, [apiKey, actualSymbol, timeframe, latestChartInfo, isChartLoading, analysisResult, analysisPanelMode]);
-  
+  }, [apiKey, actualSymbol, timeframe, latestChartInfo, isChartLoading, analysisResult]);
+
   const handleShowChat = () => {
     setAnalysisPanelMode('chat');
-    setChatError(null); 
+    setChatError(null);
     if (!apiKeyPresent) {
-        setChatError("Clave API no configurada. El Chat IA no está disponible.");
+      setChatError("Clave API no configurada. El Chat IA no está disponible.");
     } else if (!chatSessionRef.current) {
-        initializeChatSession(); // Attempt to initialize if not already done
+      initializeChatSession(); // Attempt to initialize if not already done
     }
   };
 
   const handleSendMessageToChat = async (messageText: string) => {
     if (!messageText.trim() || chatLoading) return;
-    
+
     if (!chatSessionRef.current) {
-        setChatError("La sesión de chat no está inicializada. Intenta de nuevo.");
-        initializeChatSession(); // Attempt to re-initialize
-        return;
+      setChatError("La sesión de chat no está inicializada. Intenta de nuevo.");
+      initializeChatSession(); // Attempt to re-initialize
+      return;
     }
 
     let userTextForAI = messageText.trim();
@@ -325,22 +337,29 @@ ${historicalData.length > 0 ? JSON.stringify(historicalData.slice(-50), null, 2)
 --- FIN DEL CONTEXTO DEL GRÁFICO ---
 `;
 
-    if (analysisResult && 
-        analysisResult.analisis_general?.simbolo === displaySymbolForAI &&
-        analysisResult.analisis_general?.temporalidad_principal_analisis === timeframe.toUpperCase()
-    ) {
-        const analysisContext = `--- INICIO DEL CONTEXTO DE ANÁLISIS ---
+    // 🔥 MEJORA: Siempre incluir análisis previo disponible, incluso si es de otra temporalidad
+    if (analysisResult && analysisResult.analisis_general?.simbolo === displaySymbolForAI) {
+      const isMatchingTimeframe = analysisResult.analisis_general?.temporalidad_principal_analisis === timeframe.toUpperCase();
+
+      let timeframeNote = "";
+      if (!isMatchingTimeframe) {
+        timeframeNote = `
+
+⚠️ NOTA IMPORTANTE PARA LA IA: El análisis técnico disponible fue generado para la temporalidad ${analysisResult.analisis_general?.temporalidad_principal_analisis || 'N/A'}, pero el usuario está viendo actualmente el gráfico en ${timeframe.toUpperCase()}. Considera esta diferencia en tu respuesta. El análisis sigue siendo válido como contexto, pero puedes mencionar que algunas observaciones podrían ser más relevantes en la temporalidad original del análisis.`;
+      }
+
+      const analysisContext = `--- INICIO DEL CONTEXTO DE ANÁLISIS ---
 ${chartContext}
 
 ANÁLISIS TÉCNICO PREVIO DISPONIBLE:
-${JSON.stringify(analysisResult, null, 2)}
+${JSON.stringify(analysisResult, null, 2)}${timeframeNote}
 --- FIN DEL CONTEXTO DE ANÁLISIS ---
 
 Pregunta del usuario: ${messageText.trim()}`;
-        userTextForAI = analysisContext;
+      userTextForAI = analysisContext;
     } else {
-        // If no analysis available, still provide chart context
-        userTextForAI = `${chartContext}
+      // If no analysis available for this symbol, still provide chart context
+      userTextForAI = `${chartContext}
 
 Pregunta del usuario: ${messageText.trim()}`;
     }
@@ -360,7 +379,7 @@ Pregunta del usuario: ${messageText.trim()}`;
       const stream = await chatSessionRef.current.sendMessageStream({ message: userTextForAI });
       let currentAiMessageId = crypto.randomUUID();
       let accumulatedResponse = "";
-      
+
       setChatMessages((prevMessages) => [
         ...prevMessages,
         { id: currentAiMessageId, sender: 'ai', text: "▋", timestamp: Date.now() },
@@ -375,10 +394,10 @@ Pregunta del usuario: ${messageText.trim()}`;
         );
       }
       setChatMessages((prevMessages) =>
-          prevMessages.map((msg) =>
-            msg.id === currentAiMessageId ? { ...msg, text: accumulatedResponse } : msg
-          )
-        );
+        prevMessages.map((msg) =>
+          msg.id === currentAiMessageId ? { ...msg, text: accumulatedResponse } : msg
+        )
+      );
     } catch (e: any) {
       console.error("Error sending message to Gemini Chat:", e);
       const errorMessage = `Falló la obtención de respuesta de la IA: ${e.message}`;
@@ -397,7 +416,7 @@ Pregunta del usuario: ${messageText.trim()}`;
     setChatError(null);
     // Re-initialize chat session to clear AI's context as well
     if (apiKeyPresent) {
-        initializeChatSession();
+      initializeChatSession();
     }
   };
 
@@ -407,15 +426,115 @@ Pregunta del usuario: ${messageText.trim()}`;
     const symbolToConvert = symbolInput || actualSymbol;
     const consistentNewSymbol = getConsistentSymbolForDataSource(symbolToConvert, newDataSource);
     setActualSymbol(consistentNewSymbol);
-    setSymbolInput(consistentNewSymbol); 
+    setSymbolInput(consistentNewSymbol);
   };
-  
+
   const toggleAllMAsVisibility = (forceVisible?: boolean) => {
-    const newVisibility = typeof forceVisible === 'boolean' 
-        ? forceVisible 
-        : !movingAverages.every(ma => ma.visible);
+    const newVisibility = typeof forceVisible === 'boolean'
+      ? forceVisible
+      : !movingAverages.every(ma => ma.visible);
     setMovingAverages(prevMAs => prevMAs.map(ma => ({ ...ma, visible: newVisibility })));
   };
+
+  const toggleTimeframeFavorite = (timeframe: string) => {
+    setFavoriteTimeframes(prev => {
+      if (prev.includes(timeframe)) {
+        // Remove from favorites
+        return prev.filter(tf => tf !== timeframe);
+      } else {
+        // Add to favorites (limit to 8 for UI space)
+        if (prev.length >= 8) {
+          // Replace the last one
+          return [...prev.slice(0, 7), timeframe];
+        }
+        return [...prev, timeframe];
+      }
+    });
+  };
+
+  const resetToDefaultFavorites = () => {
+    setFavoriteTimeframes([...DEFAULT_FAVORITE_TIMEFRAMES]);
+  };
+
+  // 🆕 Funciones para el Sistema de Plantillas
+  const getCurrentConfiguration = useCallback((): TemplateConfiguration => {
+    return {
+      movingAverages,
+      theme,
+      chartPaneBackgroundColor,
+      volumePaneHeight,
+      wSignalColor,
+      wSignalOpacity,
+      showWSignals,
+      showAiAnalysisDrawings,
+      favoriteTimeframes,
+      defaultDataSource: dataSource,
+      defaultSymbol: actualSymbol,
+      defaultTimeframe: timeframe
+    };
+  }, [
+    movingAverages, theme, chartPaneBackgroundColor, volumePaneHeight,
+    wSignalColor, wSignalOpacity, showWSignals, showAiAnalysisDrawings,
+    favoriteTimeframes, dataSource, actualSymbol, timeframe
+  ]);
+
+  const handleSaveTemplate = useCallback((template: Omit<ChartTemplate, 'id' | 'createdAt' | 'lastModified'>) => {
+    const templateId = templateManager.saveTemplate(template);
+    console.log('Template saved with ID:', templateId);
+  }, [templateManager]);
+
+  const handleLoadTemplate = useCallback((templateId: string) => {
+    const config = templateManager.loadTemplate(templateId);
+    if (config) {
+      // Aplicar toda la configuración cargada
+      setMovingAverages(config.movingAverages);
+      setTheme(config.theme);
+      setChartPaneBackgroundColor(config.chartPaneBackgroundColor);
+      setVolumePaneHeight(config.volumePaneHeight);
+      setWSignalColor(config.wSignalColor);
+      setWSignalOpacity(config.wSignalOpacity);
+      setShowWSignals(config.showWSignals);
+      setShowAiAnalysisDrawings(config.showAiAnalysisDrawings);
+      setFavoriteTimeframes(config.favoriteTimeframes);
+
+      // Configuración opcional por defecto
+      if (config.defaultDataSource) {
+        setDataSource(config.defaultDataSource);
+      }
+      if (config.defaultSymbol) {
+        const consistentSymbol = getConsistentSymbolForDataSource(config.defaultSymbol, config.defaultDataSource || dataSource);
+        setActualSymbol(consistentSymbol);
+        setSymbolInput(consistentSymbol);
+      }
+      if (config.defaultTimeframe) {
+        setTimeframe(config.defaultTimeframe);
+      }
+
+      console.log('Template loaded and applied');
+    }
+  }, [templateManager, dataSource]);
+
+  const handleDeleteTemplate = useCallback((templateId: string) => {
+    templateManager.deleteTemplate(templateId);
+    console.log('Template deleted:', templateId);
+  }, [templateManager]);
+
+  const handleSetAsDefault = useCallback((templateId: string) => {
+    templateManager.setAsDefault(templateId);
+    console.log('Template set as default:', templateId);
+  }, [templateManager]);
+
+  // Crear plantilla por defecto si es necesario
+  useEffect(() => {
+    templateManager.createDefaultTemplateIfNeeded(getCurrentConfiguration());
+  }, [templateManager, getCurrentConfiguration]);
+
+  // Actualizar plantilla activa cuando cambie la configuración
+  useEffect(() => {
+    if (templateManager.activeTemplateId) {
+      templateManager.updateActiveTemplate(getCurrentConfiguration());
+    }
+  }, [templateManager, getCurrentConfiguration]);
 
   return (
     <div className={`flex flex-col h-screen antialiased ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gray-100 text-gray-900'}`}>
@@ -426,7 +545,7 @@ Pregunta del usuario: ${messageText.trim()}`;
             <img src="/logo.png" alt="TradingRoad Logo" className="w-6 h-6" />
             <h1 className={`text-lg sm:text-xl font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>TradingRoad</h1>
           </div>
-          
+
           {/* Controles discretos del mercado */}
           <div className="flex items-center gap-1 sm:gap-2">
             {/* Exchange selector */}
@@ -449,7 +568,7 @@ Pregunta del usuario: ${messageText.trim()}`;
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-              
+
               {/* Manual input for custom symbols */}
               <input
                 type="text"
@@ -460,28 +579,93 @@ Pregunta del usuario: ${messageText.trim()}`;
               />
             </div>
 
-            {/* Timeframes */}
+            {/* Timeframes with Smart Favorites System */}
             <div className="flex items-center gap-1">
-              {QUICK_SELECT_TIMEFRAMES.slice(0, 4).map(tf => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`text-xs px-1.5 py-1 rounded transition-colors ${
-                    timeframe === tf
-                      ? 'bg-sky-500 text-white'
-                      : theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  }`}
+              {/* Favorite timeframes - showing all favorites ordered */}
+              {favoriteTimeframes
+                .sort((a, b) => {
+                  // Order by typical trading hierarchy: m -> h -> d -> w
+                  const order = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
+                  return order.indexOf(a) - order.indexOf(b);
+                })
+                .map(tf => (
+                  <div key={tf} className="relative group">
+                    <button
+                      onClick={() => setTimeframe(tf)}
+                      onDoubleClick={() => toggleTimeframeFavorite(tf)}
+                      title={`${tf.toUpperCase()} - Doble click para quitar de favoritos`}
+                      className={`relative text-xs px-2.5 py-1.5 rounded-lg transition-all duration-200 border ${timeframe === tf
+                        ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30 scale-105 border-sky-400'
+                        : theme === 'dark'
+                          ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 hover:scale-105 border-slate-600 hover:border-slate-500'
+                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700 hover:scale-105 border-gray-200 hover:border-gray-300'
+                        } ${favoriteTimeframes.length > 6 ? 'px-1.5 py-1' : 'px-2.5 py-1.5'}`}
+                    >
+                      <span className="font-medium">{tf.toUpperCase()}</span>
+                    </button>
+                  </div>
+                ))}
+
+              {/* Dropdown for managing timeframes */}
+              <div className="relative group">
+                <select
+                  value={timeframe}
+                  onChange={(e) => {
+                    if (e.target.value === 'RESET_FAVORITES') {
+                      resetToDefaultFavorites();
+                      return;
+                    }
+                    setTimeframe(e.target.value);
+                  }}
+                  title="Gestionar temporalidades"
+                  className={`text-xs px-2 py-1.5 rounded-lg border-0 focus:ring-2 focus:ring-sky-500 transition-all ${theme === 'dark'
+                    ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
-                  {tf}
+                  <optgroup label="📌 Favoritos">
+                    {favoriteTimeframes
+                      .sort((a, b) => {
+                        const order = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
+                        return order.indexOf(a) - order.indexOf(b);
+                      })
+                      .map(tf => (
+                        <option key={`fav-${tf}`} value={tf}>{tf.toUpperCase()}</option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="➕ Añadir más">
+                    {QUICK_SELECT_TIMEFRAMES
+                      .filter(tf => !favoriteTimeframes.includes(tf))
+                      .map(tf => (
+                        <option key={tf} value={tf}>{tf.toUpperCase()}</option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="⚙️ Gestión">
+                    <option value="RESET_FAVORITES">🔄 Restaurar por defecto</option>
+                  </optgroup>
+                </select>
+
+                {/* Enhanced Add/Remove favorite button with counter */}
+                <button
+                  onClick={() => toggleTimeframeFavorite(timeframe)}
+                  title={`${favoriteTimeframes.includes(timeframe) ? 'Quitar de favoritos' : 'Añadir a favoritos'} (${favoriteTimeframes.length}/8 favoritos)`}
+                  className={`ml-1 text-xs px-2 py-1.5 rounded-lg transition-all duration-200 relative ${favoriteTimeframes.includes(timeframe)
+                    ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 shadow-md'
+                    : theme === 'dark'
+                      ? 'bg-slate-600 text-slate-300 hover:bg-yellow-500 hover:text-white border border-slate-500 hover:border-yellow-500'
+                      : 'bg-gray-200 text-gray-600 hover:bg-yellow-500 hover:text-white border border-gray-300 hover:border-yellow-500'
+                    }`}
+                >
+                  {favoriteTimeframes.includes(timeframe) ? '✓' : '+'}
+                  {/* Counter badge */}
+                  <span className={`absolute -top-1 -right-1 w-4 h-4 text-xs rounded-full flex items-center justify-center font-bold ${favoriteTimeframes.length >= 8
+                    ? 'bg-red-500 text-white'
+                    : 'bg-blue-500 text-white'
+                    }`}>
+                    {favoriteTimeframes.length}
+                  </span>
                 </button>
-              ))}
-              <select
-                value={timeframe}
-                onChange={(e) => setTimeframe(e.target.value)}
-                className={`text-xs px-1 py-1 rounded border-0 focus:ring-1 focus:ring-sky-500 ${theme === 'dark' ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}
-              >
-                {QUICK_SELECT_TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
-              </select>
+              </div>
             </div>
           </div>
         </div>
@@ -489,22 +673,21 @@ Pregunta del usuario: ${messageText.trim()}`;
         <div className="flex items-center gap-2">
           {/* 1. Análisis IA - Nuevo diseño con iconos y estado */}
           <button
-            onClick={handleRequestAnalysis}
+            onClick={(e) => handleRequestAnalysis(e.shiftKey)}
             disabled={analysisLoading || isChartLoading || !apiKeyPresent}
-            title="Análisis IA"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${
-              apiKeyPresent && !analysisLoading && !isChartLoading
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-blue-500/25'
-                : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-            }`}
+            title={`Análisis IA${apiKeyPresent ? ' (Shift+Click para regenerar)' : ''}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${apiKeyPresent && !analysisLoading && !isChartLoading
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-blue-500/25'
+              : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+              }`}
           >
             <div className="w-4 h-4 flex items-center justify-center relative">
               {analysisLoading ? (
                 <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 3v18h18M7 12l3-3 4 4 5-5"/>
-                  <path d="M21 7v4h-4"/>
+                  <path d="M3 3v18h18M7 12l3-3 4 4 5-5" />
+                  <path d="M21 7v4h-4" />
                 </svg>
               )}
             </div>
@@ -513,21 +696,20 @@ Pregunta del usuario: ${messageText.trim()}`;
             </span>
             <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${apiKeyPresent ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-red-400'}`}></div>
           </button>
-          
+
           {/* 2. TradeGuru IA - Nuevo diseño */}
           <button
             onClick={handleShowChat}
             disabled={chatLoading || !apiKeyPresent}
             title="TradeGuru IA"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${
-              apiKeyPresent && !chatLoading
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
-                : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${apiKeyPresent && !chatLoading
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
+              : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+              }`}
           >
             <div className="w-4 h-4 flex items-center justify-center">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
+                <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" />
               </svg>
             </div>
             <span className="text-xs font-medium">Chat IA</span>
@@ -538,15 +720,14 @@ Pregunta del usuario: ${messageText.trim()}`;
           <button
             onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)}
             title={showAiAnalysisDrawings ? 'Ocultar Señales' : 'Mostrar Señales'}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${
-              showAiAnalysisDrawings 
-                ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-orange-500/25'
-                : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-gray-500/25'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${showAiAnalysisDrawings
+              ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-orange-500/25'
+              : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-gray-500/25'
+              }`}
           >
             <div className="w-4 h-4 flex items-center justify-center">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
             </div>
             <span className="text-xs font-medium">Señales</span>
@@ -557,29 +738,44 @@ Pregunta del usuario: ${messageText.trim()}`;
           <button
             onClick={() => setDisplaySettingsDialogOpen(true)}
             title="Configuración e Indicadores"
-            className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 shadow-md ${
-              theme === 'dark' 
-                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/25'
-                : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-indigo-500/25'
-            }`}
+            className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 shadow-md ${theme === 'dark'
+              ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/25'
+              : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-indigo-500/25'
+              }`}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 3v18h18"/>
-              <path d="M7 12l3-3 4 4 5-5"/>
+              <path d="M3 3v18h18" />
+              <path d="M7 12l3-3 4 4 5-5" />
             </svg>
           </button>
 
-          {/* 5. Panel Toggle - Ocultar Panel */}
+          {/* 4.5. Plantillas - Gestión de Configuraciones */}
           <button
-            onClick={() => setAnalysisPanelMode(analysisPanelMode === 'initial' ? 'analysis' : 'initial')}
+            onClick={() => setShowTemplateManager(true)}
+            title={`Gestión de Plantillas${templateManager.activeTemplateId ? ` (Activa: ${templateManager.getActiveTemplate()?.name})` : ''}`}
+            className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 shadow-md ${theme === 'dark'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
+              : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/25'
+              }`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" />
+              <path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" />
+              <path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
+            </svg>
+          </button>
+
+          {/* 5. Panel Toggle - Mostrar/Ocultar Panel */}
+          <button
+            onClick={() => setAnalysisPanelMode(analysisPanelMode === 'initial' ? (analysisResult ? 'analysis' : 'initial') : 'initial')}
             title={analysisPanelMode === 'initial' ? 'Mostrar Panel IA' : 'Ocultar Panel IA'}
             className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d={analysisPanelMode === 'initial' ? "M9 5v14l11-7z" : "M15 19l-7-7 7-7v14z"}/>
+              <path d={analysisPanelMode === 'initial' ? "M9 5v14l11-7z" : "M15 19l-7-7 7-7v14z"} />
             </svg>
           </button>
-          
+
           {/* 6. Día y noche */}
           <button
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
@@ -619,16 +815,15 @@ Pregunta del usuario: ${messageText.trim()}`;
         </div>
         <div
           id="controls-analysis-panel"
-          className={`w-full md:w-80 lg:w-[360px] xl:w-[400px] flex-none flex flex-col gap-2 sm:gap-4 overflow-y-auto order-2 md:order-1 ${
-            analysisPanelMode === 'initial' ? 'hidden' : ''
-          }`}
+          className={`w-full md:w-80 lg:w-[360px] xl:w-[400px] flex-none flex flex-col gap-2 sm:gap-4 overflow-y-auto order-2 md:order-1 ${analysisPanelMode === 'initial' ? 'hidden' : ''
+            }`}
         >
           <div className={`${theme === 'dark' ? 'bg-slate-800' : 'bg-white'} rounded-lg shadow-md flex-grow flex flex-col`}>
-            <AnalysisPanel 
+            <AnalysisPanel
               panelMode={analysisPanelMode}
-              analysisResult={analysisResult} 
+              analysisResult={analysisResult}
               analysisLoading={analysisLoading}
-              analysisError={analysisError} 
+              analysisError={analysisError}
               chatMessages={chatMessages}
               chatLoading={chatLoading}
               chatError={chatError}
@@ -640,7 +835,7 @@ Pregunta del usuario: ${messageText.trim()}`;
           </div>
         </div>
       </main>
-      
+
       {displaySettingsDialogOpen && (
         <DisplaySettingsDialog
           isOpen={displaySettingsDialogOpen}
@@ -661,6 +856,20 @@ Pregunta del usuario: ${messageText.trim()}`;
           setShowWSignals={setShowWSignals}
         />
       )}
+
+      {/* 🆕 Gestor de Plantillas */}
+      <TemplateManager
+        templates={templateManager.templates}
+        activeTemplateId={templateManager.activeTemplateId}
+        onSaveTemplate={handleSaveTemplate}
+        onLoadTemplate={handleLoadTemplate}
+        onDeleteTemplate={handleDeleteTemplate}
+        onSetAsDefault={handleSetAsDefault}
+        isOpen={showTemplateManager}
+        onClose={() => setShowTemplateManager(false)}
+        theme={theme}
+        currentConfig={getCurrentConfiguration()}
+      />
     </div>
   );
 };

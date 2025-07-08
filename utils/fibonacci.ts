@@ -19,7 +19,7 @@ export const calculateFibonacciRetracements = (
   levels: number[] = [0.236, 0.382, 0.5, 0.618, 0.786]
 ): FibonacciLevel[] => {
   const range = pointB - pointA;
-  
+
   return levels.map(level => ({
     level,
     price: pointB - (range * level),
@@ -42,11 +42,11 @@ export const calculateFibonacciExtensions = (
   levels: number[] = [1.272, 1.414, 1.618, 2.618]
 ): FibonacciLevel[] => {
   const impulseRange = pointB - pointA;
-  
+
   return levels.map(level => {
     // Extension calculation: C + (impulse * extension_ratio)
     const extensionPrice = pointC + (impulseRange * level);
-    
+
     return {
       level,
       price: extensionPrice,
@@ -70,11 +70,11 @@ export const calculateFibonacciExtensionsAlternative = (
   levels: number[] = [-0.272, -0.618, -1.272]
 ): FibonacciLevel[] => {
   const impulseRange = pointB - pointA;
-  
+
   return levels.map(level => {
     // Alternative extension: B + (impulse * extension_ratio)
     const extensionPrice = pointB + (impulseRange * level);
-    
+
     return {
       level,
       price: extensionPrice,

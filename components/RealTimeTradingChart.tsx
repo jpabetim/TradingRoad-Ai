@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickData as LWCCandlestickData, LineData as LWCLineData, HistogramData as LWCHistogramData,
-  LineStyle, UTCTimestamp, PriceScaleMode, IPriceLine, DeepPartial, ChartOptions, SeriesMarker, Time, PriceScaleOptions, ColorType,
+  LineStyle, UTCTimestamp, PriceScaleMode, IPriceLine, DeepPartial, ChartOptions, SeriesMarker, Time, ColorType,
   CandlestickSeriesOptions, LineSeriesOptions, HistogramSeriesOptions // Removed SeriesType and SeriesOptionsMap
 } from 'lightweight-charts';
 import pako from 'pako';
@@ -597,26 +597,117 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
       });
       // currentSeries.setMarkers(markers); // Removed due to linter error
 
-      // Draw Fibonacci levels
+      // Draw Fibonacci levels with enhanced visualization
       if (analisis_fibonacci) {
-        const { niveles_retroceso, niveles_extension } = analisis_fibonacci;
+        const { htf, ltf, niveles_retroceso, niveles_extension } = analisis_fibonacci;
         const fiboColors = theme === 'dark' ? THEME_COLORS.dark : THEME_COLORS.light;
 
-        const drawFiboLevels = (levels: FibonacciLevel[], fiboColor: string, prefix: string = "") => {
+        const drawFiboLevels = (levels: FibonacciLevel[], fiboColor: string, prefix: string = "", isExtension: boolean = false) => {
           levels.forEach(level => {
+            // Enhanced line style based on Fibonacci level importance
+            let lineWidth: 1 | 2 | 3 | 4 = 1; // Explicit type annotation
+            let lineStyle = LineStyle.Dashed;
+
+            // Golden ratio levels (0.618, 1.618) get special treatment
+            if (level.level === 0.618 || level.level === 1.618) {
+              lineWidth = 3;
+              lineStyle = LineStyle.Solid;
+            }
+            // Major levels (0.5, 1.0) get medium thickness
+            else if (level.level === 0.5 || level.level === 1.0) {
+              lineWidth = 2;
+              lineStyle = LineStyle.Solid;
+            }
+            // Extension levels get dotted style for differentiation
+            else if (isExtension) {
+              lineStyle = LineStyle.Dotted;
+            }
+
             const line = currentSeries.createPriceLine({
               price: level.price,
               color: fiboColor,
-              lineWidth: 1,
-              lineStyle: LineStyle.LargeDashed, // Changed from LongDashed
+              lineWidth: lineWidth,
+              lineStyle: lineStyle,
               axisLabelVisible: true,
-              title: `${prefix}${level.label}`
+              title: `${prefix}${level.label} (${level.price.toFixed(2)})`
             });
             analysisPriceLinesRef.current.push(line);
           });
         };
-        if (niveles_retroceso) drawFiboLevels(niveles_retroceso, fiboColors.fiboRetracement);
-        if (niveles_extension) drawFiboLevels(niveles_extension, fiboColors.fiboExtension, "Ext: ");
+
+        // 🔥 NUEVO: Soporte para formato htf/ltf moderno
+        // Verificar si existen niveles en formato legacy (para compatibilidad)
+        if (niveles_retroceso || niveles_extension) {
+          if (niveles_retroceso) drawFiboLevels(niveles_retroceso, fiboColors.fiboRetracement, "Fib ", false);
+          if (niveles_extension) drawFiboLevels(niveles_extension, fiboColors.fiboExtension, "Ext ", true);
+        }
+
+        // 🔥 NUEVO: Soporte para formato htf/ltf moderno
+        // Mostrar análisis HTF (temporalidad alta) si está disponible
+        if (htf) {
+          // Se pueden agregar líneas para indicar puntos clave del impulso HTF
+          // Por simplicidad, visualizamos solo los puntos de inicio y fin del impulso HTF
+          if (htf.precio_inicio_impulso && htf.precio_fin_impulso) {
+            const htfStartLine = currentSeries.createPriceLine({
+              price: htf.precio_inicio_impulso,
+              color: theme === 'dark' ? '#FFA500' : '#FF8C00', // Orange
+              lineWidth: 2,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: `HTF Inicio Impulso (${htf.precio_inicio_impulso.toFixed(2)})`
+            });
+            analysisPriceLinesRef.current.push(htfStartLine);
+
+            const htfEndLine = currentSeries.createPriceLine({
+              price: htf.precio_fin_impulso,
+              color: theme === 'dark' ? '#FFA500' : '#FF8C00', // Orange
+              lineWidth: 2,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: `HTF Fin Impulso (${htf.precio_fin_impulso.toFixed(2)})`
+            });
+            analysisPriceLinesRef.current.push(htfEndLine);
+          }
+        }
+
+        // Mostrar análisis LTF (temporalidad actual) si está disponible
+        if (ltf) {
+          // Visualizar puntos clave del análisis LTF
+          if (ltf.precio_inicio_impulso && ltf.precio_fin_impulso) {
+            const ltfStartLine = currentSeries.createPriceLine({
+              price: ltf.precio_inicio_impulso,
+              color: theme === 'dark' ? '#00CED1' : '#008B8B', // DarkTurquoise
+              lineWidth: 2,
+              lineStyle: LineStyle.Solid,
+              axisLabelVisible: true,
+              title: `LTF Inicio Impulso (${ltf.precio_inicio_impulso.toFixed(2)})`
+            });
+            analysisPriceLinesRef.current.push(ltfStartLine);
+
+            const ltfEndLine = currentSeries.createPriceLine({
+              price: ltf.precio_fin_impulso,
+              color: theme === 'dark' ? '#00CED1' : '#008B8B', // DarkTurquoise
+              lineWidth: 2,
+              lineStyle: LineStyle.Solid,
+              axisLabelVisible: true,
+              title: `LTF Fin Impulso (${ltf.precio_fin_impulso.toFixed(2)})`
+            });
+            analysisPriceLinesRef.current.push(ltfEndLine);
+
+            // Si hay precio de fin de retroceso, también mostrarlo
+            if (ltf.precio_fin_retroceso) {
+              const ltfRetracementLine = currentSeries.createPriceLine({
+                price: ltf.precio_fin_retroceso,
+                color: theme === 'dark' ? '#FFB6C1' : '#FF69B4', // LightPink/HotPink
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: `LTF Fin Retroceso (${ltf.precio_fin_retroceso.toFixed(2)})`
+              });
+              analysisPriceLinesRef.current.push(ltfRetracementLine);
+            }
+          }
+        }
       }
 
 
@@ -678,7 +769,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
         close: candle.close,
         volume: candle.volume
       }));
-      
+
       onHistoricalDataUpdate(marketDataPoints);
     }
   }, [historicalData, onHistoricalDataUpdate]); // ¡Importante! El efecto depende de `historicalData`

@@ -17,7 +17,7 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
 }) => {
 
   const toggleMAVisibility = (id: string) => {
-    setMovingAverages(movingAverages.map(ma => 
+    setMovingAverages(movingAverages.map(ma =>
       ma.id === id ? { ...ma, visible: !ma.visible } : ma
     ));
   };
@@ -36,17 +36,16 @@ const ControlsPanel: React.FC<ControlsPanelProps> = ({
             {movingAverages.every(ma => ma.visible) ? 'Ocultar Todas' : 'Mostrar Todas'}
           </button>
         </div>
-        
+
         <div className="space-y-2">
           {movingAverages.map(ma => (
             <div key={ma.id} className="flex items-center gap-2">
               <button
                 onClick={() => toggleMAVisibility(ma.id)}
-                className={`flex items-center gap-2 text-xs px-2 py-1 rounded transition-colors ${
-                  ma.visible 
+                className={`flex items-center gap-2 text-xs px-2 py-1 rounded transition-colors ${ma.visible
                     ? (theme === 'dark' ? 'bg-slate-700 text-slate-200' : 'bg-gray-200 text-gray-700')
                     : (theme === 'dark' ? 'bg-slate-600 text-slate-400' : 'bg-gray-300 text-gray-500')
-                }`}
+                  }`}
               >
                 <span
                   className="w-3 h-3 rounded-full"

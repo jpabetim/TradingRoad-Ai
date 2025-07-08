@@ -52,7 +52,7 @@ EXPOSE 80
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:80/ || exit 1
+    CMD curl -f http://localhost:80/ || exit 1
 
 # Cambiar a usuario no-root
 USER nginx

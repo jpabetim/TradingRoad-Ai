@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { GeminiAnalysisResult, TradeSetup, AnalysisPointType, FibonacciAnalysis, FibonacciLevel } from '../types';
+import { GeminiAnalysisResult, TradeSetup, AnalysisPointType, FibonacciAnalysis, FibonacciLevel, FibonacciImpulseAnalysis } from '../types';
 import { AnalysisPanelMode, ChatMessage } from '../App';
 import { calculateFibonacciRetracements, calculateFibonacciExtensions } from '../utils/fibonacci';
 
@@ -49,22 +49,105 @@ const TradeSetupDisplay: React.FC<{ setup: TradeSetup | undefined; }> = ({
   if (!setup || setup.tipo === "ninguno") {
     return <p className="text-xs sm:text-sm text-slate-400 italic">No se identificó una configuración de trade específica.</p>;
   }
+
+  // Mapeo de colores y estilos para cada tipo de trading
+  const estiloConfig: Record<string, { color: string; icon: string; description: string }> = {
+    scalping: {
+      color: "text-yellow-400 bg-yellow-400/10 border-yellow-400/30",
+      icon: "⚡",
+      description: "Operación rápida (minutos)"
+    },
+    intradia: {
+      color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/30",
+      icon: "🕐",
+      description: "Operación intradía (horas)"
+    },
+    swing: {
+      color: "text-purple-400 bg-purple-400/10 border-purple-400/30",
+      icon: "📈",
+      description: "Operación swing (días/semanas)"
+    },
+    largo_plazo: {
+      color: "text-orange-400 bg-orange-400/10 border-orange-400/30",
+      icon: "🎯",
+      description: "Operación a largo plazo (semanas/meses)"
+    }
+  };
+
+  const estiloInfo = estiloConfig[setup.estilo_trade || ''] || {
+    color: "text-slate-300 bg-slate-600/10 border-slate-400/30",
+    icon: "📊",
+    description: "Estilo no especificado"
+  };
+
   return (
-    <div className="space-y-1 mt-1 p-2 sm:p-3 bg-slate-700/50 rounded-md">
-      <DetailItem label="Tipo" value={setup.tipo?.toUpperCase()} />
-      <DetailItem label="Condición de Entrada" value={setup.descripcion_entrada} />
-      <DetailItem label="Precio de Entrada Ideal" value={setup.punto_entrada_ideal ? `$${setup.punto_entrada_ideal.toFixed(Math.abs(setup.punto_entrada_ideal) < 1 ? 4 : 2)}` : undefined} />
-      <DetailItem label="Zona de Entrada" value={setup.zona_entrada ? `[$${setup.zona_entrada[0].toFixed(Math.abs(setup.zona_entrada[0]) < 1 ? 4 : 2)} - $${setup.zona_entrada[1].toFixed(Math.abs(setup.zona_entrada[1]) < 1 ? 4 : 2)}]` : undefined} />
-      <DetailItem label="Stop Loss" value={setup.stop_loss ? `$${setup.stop_loss.toFixed(Math.abs(setup.stop_loss) < 1 ? 4 : 2)}` : undefined} />
-      <DetailItem label="Take Profit 1" value={setup.take_profit_1 ? `$${setup.take_profit_1.toFixed(Math.abs(setup.take_profit_1) < 1 ? 4 : 2)}` : undefined} />
-      {setup.take_profit_2 && <DetailItem label="Take Profit 2" value={`$${setup.take_profit_2.toFixed(Math.abs(setup.take_profit_2) < 1 ? 4 : 2)}`} />}
-      {setup.take_profit_3 && <DetailItem label="Take Profit 3" value={`$${setup.take_profit_3.toFixed(Math.abs(setup.take_profit_3) < 1 ? 4 : 2)}`} />}
-      {setup.razon_fundamental && <p className="text-xs sm:text-sm text-slate-300 mt-1"><span className="font-medium text-slate-100">Razón:</span> {setup.razon_fundamental}</p>}
-      {setup.confirmaciones_adicionales && setup.confirmaciones_adicionales.length > 0 && (
-        <DetailItem label="Confirmaciones" value={setup.confirmaciones_adicionales.join(', ')} />
+    <div className="space-y-2 mt-1 p-3 bg-slate-700/50 rounded-md border border-slate-600/30">
+      {/* Header con información principal del trade */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 pb-2 border-b border-slate-600/40">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-slate-100">Tipo:</span>
+          <span className={`font-bold text-sm ${setup.tipo === 'largo' ? 'text-green-400' : 'text-red-400'}`}>
+            {setup.tipo?.toUpperCase()}
+          </span>
+        </div>
+
+        {/* NUEVO: Badge de estilo de trading */}
+        {setup.estilo_trade && (
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${estiloInfo.color}`}>
+            <span className="text-sm">{estiloInfo.icon}</span>
+            <div className="flex flex-col">
+              <span className="font-bold">{setup.estilo_trade.toUpperCase()}</span>
+              <span className="text-xs opacity-80">{estiloInfo.description}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* NUEVO: Mostrar Calificación y Confluencias */}
+      {setup.calificacion_setup && (
+        <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-600/40">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-bold text-sky-300">
+              Calificación: {setup.calificacion_setup.calificacion}
+            </span>
+            <div className={`px-2 py-0.5 rounded text-xs font-bold ${setup.calificacion_setup.calificacion === 'A' ? 'bg-green-500/20 text-green-400' :
+                setup.calificacion_setup.calificacion === 'B' ? 'bg-yellow-500/20 text-yellow-400' :
+                  'bg-red-500/20 text-red-400'
+              }`}>
+              {setup.calificacion_setup.calificacion === 'A' ? 'ALTA PROBABILIDAD' :
+                setup.calificacion_setup.calificacion === 'B' ? 'PROBABILIDAD MEDIA' :
+                  'ESPECULATIVO'}
+            </div>
+          </div>
+          <div>
+            <span className="text-xs font-medium text-slate-200 mb-1 block">Confluencias:</span>
+            <ul className="list-disc list-inside text-xs text-slate-300 space-y-0.5 pl-2">
+              {setup.calificacion_setup.confluencias.map((con, idx) => (
+                <li key={idx} className="leading-relaxed">{con}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
-      <DetailItem label="Riesgo/Beneficio" value={setup.ratio_riesgo_beneficio} />
-      <DetailItem label="Confianza" value={setup.calificacion_confianza} />
+
+      {/* Detalles del setup */}
+      <div className="space-y-1">
+        <DetailItem label="Condición de Entrada" value={setup.descripcion_entrada} />
+        <DetailItem label="Precio de Entrada Ideal" value={setup.punto_entrada_ideal ? `$${setup.punto_entrada_ideal.toFixed(Math.abs(setup.punto_entrada_ideal) < 1 ? 4 : 2)}` : undefined} />
+        <DetailItem label="Zona de Entrada" value={setup.zona_entrada ? `[$${setup.zona_entrada[0].toFixed(Math.abs(setup.zona_entrada[0]) < 1 ? 4 : 2)} - $${setup.zona_entrada[1].toFixed(Math.abs(setup.zona_entrada[1]) < 1 ? 4 : 2)}]` : undefined} />
+        <DetailItem label="Stop Loss" value={setup.stop_loss ? `$${setup.stop_loss.toFixed(Math.abs(setup.stop_loss) < 1 ? 4 : 2)}` : undefined} />
+        <DetailItem label="Lógica del Stop Loss" value={setup.gestion_stop_loss} />
+        <DetailItem label="Take Profit 1" value={setup.take_profit_1 ? `$${setup.take_profit_1.toFixed(Math.abs(setup.take_profit_1) < 1 ? 4 : 2)}` : undefined} />
+        {setup.take_profit_2 && <DetailItem label="Take Profit 2" value={`$${setup.take_profit_2.toFixed(Math.abs(setup.take_profit_2) < 1 ? 4 : 2)}`} />}
+        {setup.take_profit_3 && <DetailItem label="Take Profit 3" value={`$${setup.take_profit_3.toFixed(Math.abs(setup.take_profit_3) < 1 ? 4 : 2)}`} />}
+        <DetailItem label="Lógica del Take Profit" value={setup.gestion_take_profit} />
+        {setup.razon_fundamental && <p className="text-xs sm:text-sm text-slate-300 mt-1"><span className="font-medium text-slate-100">Razón:</span> {setup.razon_fundamental}</p>}
+        {setup.confirmaciones_adicionales && setup.confirmaciones_adicionales.length > 0 && (
+          <DetailItem label="Confirmaciones" value={setup.confirmaciones_adicionales.join(', ')} />
+        )}
+        <DetailItem label="Riesgo/Beneficio" value={setup.ratio_riesgo_beneficio} />
+        <DetailItem label="Confianza" value={setup.calificacion_confianza} />
+      </div>
     </div>
   );
 };
@@ -75,72 +158,94 @@ const FibonacciLevelDisplay: React.FC<{ level: FibonacciLevel }> = ({ level }: {
   </li>
 );
 
-const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | undefined }> = ({
-  fiboAnalysis
-}: {
-  fiboAnalysis: FibonacciAnalysis | undefined
-}) => {
-  if (!fiboAnalysis) {
-    return <p className="text-xs sm:text-sm text-slate-400 italic">Análisis Fibonacci no disponible.</p>;
-  }
+// NUEVO SUB-COMPONENTE REUTILIZABLE para mostrar un único análisis de impulso
+const SingleFibonacciImpulse: React.FC<{
+  title: string;
+  impulseAnalysis: FibonacciImpulseAnalysis;
+}> = ({ title, impulseAnalysis }) => {
+  const {
+    temporalidad_analizada,
+    descripcion_impulso,
+    precio_inicio_impulso,
+    precio_fin_impulso,
+    precio_fin_retroceso,
+  } = impulseAnalysis;
 
-  // Calculate Fibonacci levels using JavaScript instead of relying on AI calculations
   const retracementLevels = calculateFibonacciRetracements(
-    fiboAnalysis.precio_inicio_impulso,
-    fiboAnalysis.precio_fin_impulso,
+    precio_inicio_impulso,
+    precio_fin_impulso,
     [0.236, 0.382, 0.5, 0.618, 0.786]
   );
 
-  const extensionLevels = fiboAnalysis.precio_fin_retroceso !== undefined
+  const extensionLevels = precio_fin_retroceso != null
     ? calculateFibonacciExtensions(
-      fiboAnalysis.precio_inicio_impulso,
-      fiboAnalysis.precio_fin_impulso,
-      fiboAnalysis.precio_fin_retroceso,
+      precio_inicio_impulso,
+      precio_fin_impulso,
+      precio_fin_retroceso,
       [1.272, 1.414, 1.618, 2.618]
     )
     : [];
 
-  const isUpwardImpulse = fiboAnalysis.precio_fin_impulso > fiboAnalysis.precio_inicio_impulso;
+  const isUpwardImpulse = precio_fin_impulso > precio_inicio_impulso;
 
-  const sortedRetracementLevels = [...retracementLevels].sort((a, b) => {
-    return isUpwardImpulse ? b.price - a.price : a.price - b.price;
-  });
+  const sortedRetracementLevels = [...retracementLevels].sort((a, b) =>
+    isUpwardImpulse ? b.price - a.price : a.price - b.price
+  );
 
-  const sortedExtensionLevels = [...extensionLevels].sort((a, b) => {
-    return a.level - b.level;
-  });
+  const sortedExtensionLevels = [...extensionLevels].sort((a, b) => a.level - b.level);
 
   return (
-    <div className="space-y-1.5 sm:space-y-2 mt-1.5 sm:mt-2 p-2 sm:p-3 bg-slate-700 rounded-md">
-      <p className="text-xs sm:text-sm text-slate-300"><span className="font-medium text-slate-100">Impulso:</span> {fiboAnalysis.descripcion_impulso}</p>
+    <div className="space-y-1.5 mt-1.5 p-2 bg-slate-700/80 rounded-md">
+      <h4 className="text-sm font-semibold text-sky-300">{title} ({temporalidad_analizada})</h4>
+      <p className="text-xs text-slate-300"><span className="font-medium text-slate-100">Impulso:</span> {descripcion_impulso}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 text-xs">
-        <DetailItem label="Inicio Impulso (A)" value={fiboAnalysis.precio_inicio_impulso ? `$${fiboAnalysis.precio_inicio_impulso.toFixed(Math.abs(fiboAnalysis.precio_inicio_impulso) < 1 ? 4 : 2)}` : 'N/A'} />
-        <DetailItem label="Fin Impulso (B)" value={fiboAnalysis.precio_fin_impulso ? `$${fiboAnalysis.precio_fin_impulso.toFixed(Math.abs(fiboAnalysis.precio_fin_impulso) < 1 ? 4 : 2)}` : 'N/A'} />
-        {fiboAnalysis.precio_fin_retroceso != null && (
-          <DetailItem label="Fin Retroceso (C)" value={`$${fiboAnalysis.precio_fin_retroceso.toFixed(Math.abs(fiboAnalysis.precio_fin_retroceso) < 1 ? 4 : 2)}`} />
+        <DetailItem label="Inicio (A)" value={`$${precio_inicio_impulso.toFixed(Math.abs(precio_inicio_impulso) < 1 ? 4 : 2)}`} />
+        <DetailItem label="Fin (B)" value={`$${precio_fin_impulso.toFixed(Math.abs(precio_fin_impulso) < 1 ? 4 : 2)}`} />
+        {precio_fin_retroceso != null && (
+          <DetailItem label="Retroceso (C)" value={`$${precio_fin_retroceso.toFixed(Math.abs(precio_fin_retroceso) < 1 ? 4 : 2)}`} />
         )}
       </div>
 
       {sortedRetracementLevels.length > 0 && (
         <div>
-          <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mt-1.5 sm:mt-2 mb-1">Niveles de Retroceso (A-B):</h4>
+          <h5 className="text-xs font-semibold text-slate-200 mt-1.5 mb-1">Retrocesos:</h5>
           <ul className="list-disc list-inside space-y-0.5 pl-2">
-            {sortedRetracementLevels.map((level, index) => (
-              <FibonacciLevelDisplay key={`retracement-${index}`} level={level} />
-            ))}
+            {sortedRetracementLevels.map((level, index) => <FibonacciLevelDisplay key={`ret-${index}`} level={level} />)}
           </ul>
         </div>
       )}
 
       {sortedExtensionLevels.length > 0 && (
         <div>
-          <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mt-1.5 sm:mt-2 mb-1">Niveles de Extensión (A-B-C):</h4>
+          <h5 className="text-xs font-semibold text-slate-200 mt-1.5 mb-1">Extensiones:</h5>
           <ul className="list-disc list-inside space-y-0.5 pl-2">
-            {sortedExtensionLevels.map((level, index) => (
-              <FibonacciLevelDisplay key={`extension-${index}`} level={level} />
-            ))}
+            {sortedExtensionLevels.map((level, index) => <FibonacciLevelDisplay key={`ext-${index}`} level={level} />)}
           </ul>
         </div>
+      )}
+    </div>
+  );
+};
+
+// COMPONENTE PRINCIPAL ACTUALIZADO
+const FibonacciAnalysisDisplay: React.FC<{ fiboAnalysis: FibonacciAnalysis | undefined }> = ({ fiboAnalysis }) => {
+  if (!fiboAnalysis || (!fiboAnalysis.htf && !fiboAnalysis.ltf)) {
+    return <p className="text-xs sm:text-sm text-slate-400 italic">Análisis Fibonacci no disponible.</p>;
+  }
+
+  return (
+    <div className="space-y-2 mt-1 p-2 bg-slate-700 rounded-md">
+      {fiboAnalysis.htf && (
+        <SingleFibonacciImpulse
+          title="Análisis Macro"
+          impulseAnalysis={fiboAnalysis.htf}
+        />
+      )}
+      {fiboAnalysis.ltf && (
+        <SingleFibonacciImpulse
+          title="Análisis de Temporalidad Actual"
+          impulseAnalysis={fiboAnalysis.ltf}
+        />
       )}
     </div>
   );
@@ -189,6 +294,34 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     </div>
   );
 
+  // Función para extraer un resumen de oportunidades por estilo
+  const getOpportunitiesSummary = (analysisResult: GeminiAnalysisResult) => {
+    const opportunities: Array<{ style: string; type: string; scenario: string }> = [];
+
+    // Recopilar setups de todos los escenarios
+    analysisResult.escenarios_probables?.forEach(scenario => {
+      if (scenario.trade_setup_asociado && scenario.trade_setup_asociado.tipo !== "ninguno") {
+        opportunities.push({
+          style: scenario.trade_setup_asociado.estilo_trade || "sin_clasificar",
+          type: scenario.trade_setup_asociado.tipo,
+          scenario: scenario.nombre_escenario
+        });
+      }
+    });
+
+    // Añadir el setup recomendado principal si existe
+    if (analysisResult.conclusion_recomendacion?.mejor_oportunidad_actual &&
+      analysisResult.conclusion_recomendacion.mejor_oportunidad_actual.tipo !== "ninguno") {
+      opportunities.push({
+        style: analysisResult.conclusion_recomendacion.mejor_oportunidad_actual.estilo_trade || "sin_clasificar",
+        type: analysisResult.conclusion_recomendacion.mejor_oportunidad_actual.tipo,
+        scenario: "Oportunidad Principal"
+      });
+    }
+
+    return opportunities;
+  };
+
   const renderAnalysisContent = () => {
     if (analysisLoading) {
       return <div className="p-3 sm:p-4 text-center">Cargando análisis...</div>;
@@ -212,6 +345,48 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
     return (
       <div className="p-3 sm:p-4">
         <h2 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3 text-sky-400">Resultados del Análisis IA</h2>
+
+        {/* NUEVO: Resumen de Oportunidades por Estilo */}
+        {(() => {
+          const opportunities = getOpportunitiesSummary(analysisResult);
+          if (opportunities.length > 0) {
+            const styleIcons: Record<string, string> = {
+              scalping: "⚡",
+              intradia: "🕐",
+              swing: "📈",
+              largo_plazo: "🎯",
+              sin_clasificar: "📊"
+            };
+
+            return (
+              <>
+                <SectionTitle>🎯 Oportunidades Detectadas</SectionTitle>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                  {opportunities.map((opp, idx) => (
+                    <div key={idx} className={`p-2 rounded-lg border text-xs ${opp.style === 'scalping' ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400' :
+                        opp.style === 'intradia' ? 'bg-cyan-400/10 border-cyan-400/30 text-cyan-400' :
+                          opp.style === 'swing' ? 'bg-purple-400/10 border-purple-400/30 text-purple-400' :
+                            opp.style === 'largo_plazo' ? 'bg-orange-400/10 border-orange-400/30 text-orange-400' :
+                              'bg-slate-600/10 border-slate-400/30 text-slate-300'
+                      }`}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-sm">{styleIcons[opp.style] || styleIcons.sin_clasificar}</span>
+                        <span className="font-bold">{(opp.style || 'sin_clasificar').toUpperCase()}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${opp.type === 'largo' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                          }`}>
+                          {(opp.type || 'ninguno').toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-xs opacity-80 leading-tight">{opp.scenario}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          }
+          return null;
+        })()}
+
         {primaryScenario && (
           <>
             <SectionTitle>Escenario Principal</SectionTitle>
@@ -269,10 +444,35 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 <p className="text-xs text-slate-400">Ruta: {analysisResult.proyeccion_precio_visual.camino_probable_1.map(p => typeof p === 'number' ? `$${p.toFixed(Math.abs(p) < 1 ? 4 : 2)}` : p).join(' → ')}</p>
               )} </>)}
           <SectionTitle>Configuración de Trade Recomendada</SectionTitle>
-          <TradeSetupDisplay setup={analysisResult.conclusion_recomendacion?.mejor_oportunidad_actual} />
-          <SectionTitle>Análisis Fibonacci</SectionTitle>
+          <TradeSetupDisplay setup={analysisResult.conclusion_recomendacion?.mejor_oportunidad_actual} />        <SectionTitle>Análisis Fibonacci</SectionTitle>
           <FibonacciAnalysisDisplay fiboAnalysis={analysisResult.analisis_fibonacci} />
         </>
+        {/* Nueva sección de análisis contextual */}
+        {analysisResult.analisis_contextual && (
+          <>
+            <SectionTitle>Análisis Contextual</SectionTitle>
+            <div className="space-y-1.5 mt-1.5 p-2 bg-slate-700 rounded-md">
+              {analysisResult.analisis_contextual.correlacion_mercado && (
+                <div>
+                  <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mb-1">Correlaciones de Mercado:</h4>
+                  <p className="text-xs text-slate-300">{analysisResult.analisis_contextual.correlacion_mercado}</p>
+                </div>
+              )}
+              {analysisResult.analisis_contextual.liquidez_sesiones && (
+                <div>
+                  <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mb-1">Liquidez de Sesiones:</h4>
+                  <p className="text-xs text-slate-300">{analysisResult.analisis_contextual.liquidez_sesiones}</p>
+                </div>
+              )}
+              {analysisResult.analisis_contextual.comentario_funding_rate_oi && (
+                <div>
+                  <h4 className="text-xs sm:text-sm font-semibold text-slate-200 mb-1">Funding Rate y Open Interest:</h4>
+                  <p className="text-xs text-slate-300">{analysisResult.analisis_contextual.comentario_funding_rate_oi}</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
         {analysisResult.puntos_clave_grafico && analysisResult.puntos_clave_grafico.length > 0 && (
           <> <SectionTitle>Niveles y Zonas Clave Identificados</SectionTitle>
             <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-slate-300 mt-1.5 sm:mt-2 p-1.5 sm:p-2 bg-slate-700 rounded-md">
@@ -376,7 +576,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-1">
                   <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
+                    <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" />
                   </svg>
                 </div>
                 <div className="flex-1">
@@ -387,25 +587,25 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center gap-1">
                       <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
                       </svg>
                       <span>Gráfico actual</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
                       </svg>
                       <span>Niveles y zonas</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
                       </svg>
                       <span>Medias móviles</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <svg className="w-3 h-3 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
                       </svg>
                       <span>POIs y FVGs</span>
                     </div>
@@ -425,8 +625,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             >
               <div
                 className={`max-w-[80%] p-2 sm:p-3 rounded-lg text-xs sm:text-sm shadow ${msg.sender === 'user'
-                    ? `${userMessageBg} text-white`
-                    : `${aiMessageBg} ${aiMessageText}`
+                  ? `${userMessageBg} text-white`
+                  : `${aiMessageBg} ${aiMessageText}`
                   }`}
                 dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, '<br/>').replace(/```json\s*\n?(.*?)\n?\s*```/gs, (_, p1) => `<pre class="bg-slate-900 text-slate-100 p-2 rounded overflow-x-auto text-xs">${p1.replace(/</g, '&lt;').replace(/>/g, '&gt;').trim()}</pre>`).replace(/`([^`]+)`/g, '<code class="bg-opacity-50 bg-black text-white px-1 py-0.5 rounded text-xs">$1</code>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') }}
               />
