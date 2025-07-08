@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http: https: ws: wss: *.binance.com *.bingx.com *.allorigins.win; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://esm.sh; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;">
   <title>Analista de Trading IA Wyckoff/SMC</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -51,13 +52,11 @@
 <body class="bg-slate-900 text-slate-100">
   <div id="root"></div>
   <script>
-    // FOR LOCAL DEVELOPMENT ONLY: Set your Gemini API Key here.
-    // WARNING: Do NOT deploy this to a public server with your key embedded.
-    // Replace "TU_CLAVE_API_DE_GEMINI_AQUI" with your actual Google Gemini API Key.
-    // If this key is not set correctly, AI analysis features will not work.
+    // Configuración para variables de entorno
+    // En producción, estas serán inyectadas por el servidor
     window.process = {
       env: {
-        API_KEY: "TU_CLAVE_API_DE_GEMINI_AQUI" // <-- IMPORTANT: REPLACE THIS VALUE!
+        API_KEY: globalThis.VITE_API_KEY || globalThis.API_KEY || "TU_CLAVE_API_DE_GEMINI_AQUI"
       }
     };
   </script>

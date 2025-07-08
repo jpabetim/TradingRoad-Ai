@@ -61,6 +61,14 @@ cd traderoad
 npm install
 npm run build
 
+# Configurar variables de entorno en el HTML
+echo "🔑 Configurando variables de entorno..."
+echo "Por favor, ingresa tu clave API de Gemini:"
+read -s GEMINI_API_KEY
+
+# Inyectar la clave API en el HTML construido
+sed -i "s/TU_CLAVE_API_DE_GEMINI_AQUI/$GEMINI_API_KEY/g" dist/index.html
+
 # Configurar Nginx
 sudo tee /etc/nginx/sites-available/traderoad << 'EOF'
 server {
@@ -84,6 +92,7 @@ server {
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header X-Content-Type-Options "nosniff" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http: https: ws: wss: *.binance.com *.bingx.com *.allorigins.win; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://esm.sh; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;" always;
 
     # Handle SPA routing
     location / {

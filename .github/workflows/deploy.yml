@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: eu-west-2
   ECR_REPOSITORY: traderoad-app
   ECS_SERVICE: traderoad-app-service
   ECS_CLUSTER: traderoad-app-cluster
