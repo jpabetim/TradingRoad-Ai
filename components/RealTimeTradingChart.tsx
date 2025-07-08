@@ -8,6 +8,7 @@ import {
 import pako from 'pako';
 import { DataSource, GeminiAnalysisResult, TickerData, AnalysisPointType, MovingAverageConfig, FibonacciLevel, MarketDataPoint } from '../types'; // Removed DeltaZoneSettings
 import { mapTimeframeToApi } from '../constants';
+import { generateUUID } from '../utils/uuid';
 // import { IndicatorName } from '../App'; // No longer needed as RSI is removed
 
 type Theme = 'dark' | 'light';
@@ -111,8 +112,8 @@ const PROVIDERS_CONFIG: { binance: BinanceProviderConfig; bingx: BingXProviderCo
         throw new Error("Invalid response structure from allorigins.win proxy for BingX historical data.");
       }
     },
-    getKlineSubMessage: (symbol, interval) => JSON.stringify({ id: crypto.randomUUID(), reqType: 'sub', dataType: `${symbol}@kline_${interval}` }),
-    getTickerSubMessage: (symbol) => JSON.stringify({ id: crypto.randomUUID(), reqType: 'sub', dataType: `${symbol}@trade` }),
+    getKlineSubMessage: (symbol, interval) => JSON.stringify({ id: generateUUID(), reqType: 'sub', dataType: `${symbol}@kline_${interval}` }),
+    getTickerSubMessage: (symbol) => JSON.stringify({ id: generateUUID(), reqType: 'sub', dataType: `${symbol}@trade` }),
     parseKline: (data) => ({ time: data.T / 1000 as UTCTimestamp, open: parseFloat(data.o), high: parseFloat(data.h), low: parseFloat(data.l), close: parseFloat(data.c), volume: parseFloat(data.v) }),
     parseTicker: (data, currentSymbol, currentProvider) => ({ price: parseFloat(data.p), symbol: currentSymbol, provider: currentProvider })
   }

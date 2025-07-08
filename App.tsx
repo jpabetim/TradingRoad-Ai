@@ -9,6 +9,7 @@ import { analyzeChartWithGemini, ExtendedGeminiRequestPayload, getGeminiApiKey }
 import { DEFAULT_SYMBOL, DEFAULT_TIMEFRAME, DEFAULT_DATA_SOURCE, CHAT_SYSTEM_PROMPT_TEMPLATE, GEMINI_MODEL_NAME, AVAILABLE_DATA_SOURCES, AVAILABLE_SYMBOLS_BINANCE, AVAILABLE_SYMBOLS_BINGX, QUICK_SELECT_TIMEFRAMES, DEFAULT_FAVORITE_TIMEFRAMES } from './constants';
 import { GoogleGenAI, Chat } from "@google/genai";
 import { useTemplateManager, TemplateConfiguration } from './hooks/useTemplateManager';
+import { generateUUID } from './utils/uuid';
 
 // Helper for debouncing
 function debounce<T extends (...args: any[]) => void>(func: T, delay: number): (...args: Parameters<T>) => void {
@@ -363,7 +364,7 @@ Pregunta del usuario: ${messageText.trim()}`;
 
 
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       sender: 'user',
       text: messageText.trim(),
       timestamp: Date.now(),
@@ -374,7 +375,7 @@ Pregunta del usuario: ${messageText.trim()}`;
 
     try {
       const stream = await chatSessionRef.current.sendMessageStream({ message: userTextForAI });
-      let currentAiMessageId = crypto.randomUUID();
+      let currentAiMessageId = generateUUID();
       let accumulatedResponse = "";
 
       setChatMessages((prevMessages) => [
@@ -401,7 +402,7 @@ Pregunta del usuario: ${messageText.trim()}`;
       setChatError(errorMessage);
       setChatMessages((prevMessages) => [
         ...prevMessages,
-        { id: crypto.randomUUID(), sender: 'ai', text: `Error: ${e.message}`, timestamp: Date.now() },
+        { id: generateUUID(), sender: 'ai', text: `Error: ${e.message}`, timestamp: Date.now() },
       ]);
     } finally {
       setChatLoading(false);
