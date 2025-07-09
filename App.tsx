@@ -225,18 +225,6 @@ const App: React.FC = () => {
     setLatestChartInfo({ price: null, volume: null });
   }, [actualSymbol, timeframe, dataSource]);
 
-  // Force re-enable AI signals when timeframe changes if they were enabled
-  useEffect(() => {
-    if (showAiAnalysisDrawings) {
-      // Small delay to allow chart to reload, then re-trigger signals visibility
-      const timer = setTimeout(() => {
-        setShowAiAnalysisDrawings(false);
-        setTimeout(() => setShowAiAnalysisDrawings(true), 50);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [timeframe]);
-
   useEffect(() => {
     const newThemeDefaultBgColor = theme === 'dark' ? INITIAL_DARK_CHART_PANE_BACKGROUND_COLOR : INITIAL_LIGHT_CHART_PANE_BACKGROUND_COLOR;
     const isCurrentBgThemeDefault =
@@ -269,9 +257,7 @@ const App: React.FC = () => {
 
     const displaySymbolForAI = actualSymbol.includes('-') ? actualSymbol.replace('-', '/') : (actualSymbol.endsWith('USDT') ? actualSymbol.replace(/USDT$/, '/USDT') : actualSymbol);
 
-    if (!forceRegenerate && analysisResult &&
-      analysisResult.analisis_general?.simbolo === displaySymbolForAI &&
-      analysisResult.analisis_general?.temporalidad_principal_analisis === timeframe.toUpperCase()) {
+    if (!forceRegenerate && analysisResult) {
       setAnalysisPanelMode('analysis');
       return;
     }
@@ -289,6 +275,9 @@ const App: React.FC = () => {
       };
       const result = await analyzeChartWithGemini(payload);
       setAnalysisResult(result);
+      // Mostrar señales de IA por defecto después de hacer análisis
+      setShowAiAnalysisDrawings(true);
+      setShowWSignals(true);
     } catch (err) {
       let userErrorMessage = (err instanceof Error) ? err.message : "Ocurrió un error desconocido.";
       setAnalysisError(`${userErrorMessage} --- Revisa la consola para más detalles.`);
@@ -304,6 +293,14 @@ const App: React.FC = () => {
       setChatError("Clave API no configurada. El Chat IA no está disponible.");
     } else if (!chatSessionRef.current) {
       initializeChatSession();
+    }
+  };
+
+  const handleShowAnalysis = () => {
+    if (!analysisResult || analysisLoading) {
+      handleRequestAnalysis();
+    } else {
+      setAnalysisPanelMode('analysis');
     }
   };
 
@@ -481,18 +478,18 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex flex-col h-screen antialiased ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gray-100 text-gray-900'}`}>
-
       <header className={`p-2 sm:p-3 shadow-md ${theme === 'dark' ? 'bg-slate-800' : 'bg-white border-b border-gray-200'}`}>
-
         <div className="lg:hidden">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="TradingRoad Logo" className="w-6 h-6" />
-              <h1 className={`text-base sm:text-lg font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>TradingRoad</h1>
+              <img src="/logo blanco sin fondo.png" alt="TradinGuardIAn Logo" className="w-8 h-8" />
+              <h1 className={`text-base sm:text-lg font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>
+                TradinGuard<span className="text-white font-extrabold">IA</span>n
+              </h1>
             </div>
             <div className="flex items-center gap-1">
               <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} title="Seleccionar Temporalidad" className={`text-xs px-2 py-1 h-8 rounded-lg border-0 focus:ring-2 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}><optgroup label="Favoritos">{favoriteTimeframes.map(tf => (<option key={`fav-opt-${tf}`} value={tf}>{tf.toUpperCase()}</option>))}</optgroup><optgroup label="General">{QUICK_SELECT_TIMEFRAMES.filter(tf => !favoriteTimeframes.includes(tf)).map(tf => (<option key={tf} value={tf}>{tf.toUpperCase()}</option>))}</optgroup></select>
-              <button onClick={() => toggleTimeframeFavorite(timeframe)} title="Añadir/Quitar Favorito" className={`text-xs p-2 h-8 rounded ${favoriteTimeframes.includes(timeframe) ? 'bg-yellow-500 text-white' : (theme === 'dark' ? 'bg-slate-600' : 'bg-gray-200')}`}>{favoriteTimeframes.includes(timeframe) ? '★' : '☆'}</button>
+              <button onClick={() => toggleTimeframeFavorite(timeframe)} title="Añadir/Quitar Favorito" className={`p-2 h-8 w-8 flex items-center justify-center rounded text-xs ${favoriteTimeframes.includes(timeframe) ? 'bg-yellow-500 text-white' : (theme === 'dark' ? 'bg-slate-600' : 'bg-gray-200')}`}>{favoriteTimeframes.includes(timeframe) ? '★' : '☆'}</button>
               <button onClick={() => setIsPanelVisible(!isPanelVisible)} title="Mostrar/Ocultar Panel" className={`p-2 h-8 w-8 flex items-center justify-center rounded transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d={isPanelVisible ? "M15 19l-7-7 7-7v14z" : "M9 5v14l11-7z"} /></svg></button>
               <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Cambiar Tema" className={`p-2 h-8 w-8 flex items-center justify-center rounded ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}>{theme === 'light' ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>}</button>
             </div>
@@ -501,21 +498,25 @@ const App: React.FC = () => {
             <select value={dataSource} onChange={(e) => handleDataSourceChange(e.target.value as DataSource)} className={`text-xs px-2 py-1.5 h-8 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{AVAILABLE_DATA_SOURCES.map(ds => <option key={ds.value} value={ds.value}>{ds.label}</option>)}</select>
             <select value={symbolInput} onChange={(e) => handleSymbolInputChange(e.target.value)} className={`text-xs px-2 py-1.5 h-8 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{(dataSource === 'bingx' ? AVAILABLE_SYMBOLS_BINGX : AVAILABLE_SYMBOLS_BINANCE).map(s => (<option key={s} value={s}>{s}</option>))}</select>
           </div>
-          <div className="flex items-center gap-2 justify-end px-2 mb-3">
-            <button onClick={(e) => handleRequestAnalysis(e.shiftKey)} disabled={analysisLoading || isChartLoading || !apiKeyPresent} className={`flex items-center justify-center px-2 py-1.5 h-8 rounded text-base font-medium transition-colors ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 text-gray-400'}`}>⚡</button>
-            <button onClick={handleShowChat} disabled={chatLoading || !apiKeyPresent} className={`flex items-center justify-center px-2 py-1.5 h-8 rounded text-base font-medium transition-colors ${apiKeyPresent && !chatLoading ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-700 text-gray-400'}`}>🤖</button>
-            <button onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)} title="Señales" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded ${showAiAnalysisDrawings ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg></button>
-            <button onClick={() => setShowLTFFibonacci(!showLTFFibonacci)} title="Fibonacci LTF" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded ${showLTFFibonacci ? 'bg-teal-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l-4 4m8-8v13l4-4" /></svg></button>
-            <button onClick={() => setDisplaySettingsDialogOpen(true)} title="Indicadores" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" /><path d="M7 12l3-3 4 4 5-5" /></svg></button>
-            <button onClick={() => setShowTemplateManager(true)} title="Plantillas" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" /><path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" /><path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg></button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <button onClick={handleShowAnalysis} disabled={analysisLoading || isChartLoading || !apiKeyPresent} className={`p-2 h-8 w-8 flex items-center justify-center rounded text-lg font-medium transition-colors ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 text-gray-400'}`}>⚡</button>
+              <button onClick={handleShowChat} disabled={chatLoading || !apiKeyPresent} className={`p-2 h-8 w-8 flex items-center justify-center rounded text-lg font-medium transition-colors ${apiKeyPresent && !chatLoading ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-700 text-gray-400'}`}>🤖</button>
+              <button onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)} title="Señales" className={`p-2 h-8 w-8 flex items-center justify-center rounded ${showAiAnalysisDrawings ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg></button>
+              <button onClick={() => setShowLTFFibonacci(!showLTFFibonacci)} title="Fibonacci LTF" className={`p-2 h-8 w-8 flex items-center justify-center rounded ${showLTFFibonacci ? 'bg-teal-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l-4 4m8-8v13l4-4" /></svg></button>
+              <button onClick={() => setDisplaySettingsDialogOpen(true)} title="Indicadores" className={`p-2 h-8 w-8 flex items-center justify-center rounded transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" /><path d="M7 12l3-3 4 4 5-5" /></svg></button>
+              <button onClick={() => setShowTemplateManager(true)} title="Plantillas" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" /><path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" /><path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg></button>
+            </div>
           </div>
         </div>
 
         <div className="hidden lg:flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="TradingRoad Logo" className="w-6 h-6" />
-              <h1 className={`text-xl font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>TradingRoad</h1>
+              <img src="/logo blanco sin fondo.png" alt="TradinGuardIAn Logo" className="w-8 h-8" />
+              <h1 className={`text-xl font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>
+                TradinGuard<span className="text-white font-extrabold">IA</span>n
+              </h1>
             </div>
             <select value={dataSource} onChange={(e) => handleDataSourceChange(e.target.value as DataSource)} className={`text-xs px-2 py-1 h-8 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{AVAILABLE_DATA_SOURCES.map(ds => <option key={ds.value} value={ds.value}>{ds.label}</option>)}</select>
             <div className="flex items-center gap-1">
@@ -529,14 +530,13 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={(e) => handleRequestAnalysis(e.shiftKey)} title="Análisis IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={analysisLoading || isChartLoading || !apiKeyPresent}><span className="text-lg">⚡</span><span className="hidden lg:inline">{analysisLoading ? 'Analizando...' : 'Análisis'}</span></button>
+            <button onClick={() => setIsPanelVisible(!isPanelVisible)} title="Mostrar/Ocultar Panel" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d={isPanelVisible ? "M15 19l-7-7 7-7v14z" : "M9 5v14l11-7z"} /></svg></button>
+            <button onClick={handleShowAnalysis} title="Análisis IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={analysisLoading || isChartLoading || !apiKeyPresent}><span className="text-lg">⚡</span><span className="hidden xl:inline">{analysisLoading ? 'Analizando...' : 'Análisis'}</span></button>
             <button onClick={handleShowChat} title="Chat IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !chatLoading ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={chatLoading || !apiKeyPresent}><span className="text-lg">🤖</span><span className="hidden lg:inline">Chat</span></button>
-            <button onClick={() => setIsPanelVisible(!isPanelVisible)} title="Mostrar/Ocultar Panel" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d={isPanelVisible ? "M15 19l-7-7 7-7v14z" : "M9 5v14l11-7z"} /></svg></button>
             <button onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)} title="Señales" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${showAiAnalysisDrawings ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg><span className="hidden xl:inline">Señales</span></button>
             <button onClick={() => setShowLTFFibonacci(!showLTFFibonacci)} title="Fibonacci LTF" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${showLTFFibonacci ? 'bg-teal-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l-4 4m8-8v13l4-4" /></svg><span className="hidden xl:inline">Fib LTF</span></button>
             <button onClick={() => setDisplaySettingsDialogOpen(true)} title="Indicadores" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" /><path d="M7 12l3-3 4 4 5-5" /></svg></button>
             <button onClick={() => setShowTemplateManager(true)} title="Plantillas" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" /><path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" /><path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg></button>
-            <button onClick={() => setIsPanelVisible(!isPanelVisible)} title="Mostrar/Ocultar Panel" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d={isPanelVisible ? "M15 19l-7-7 7-7v14z" : "M9 5v14l11-7z"} /></svg></button>
             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Tema" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}>{theme === 'light' ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>}</button>
           </div>
         </div>
@@ -572,11 +572,12 @@ const App: React.FC = () => {
               analysisResult={analysisResult} onLatestChartInfoUpdate={handleLatestChartInfoUpdate}
               onChartLoadingStateChange={handleChartLoadingStateChange} movingAverages={movingAverages}
               theme={theme} chartPaneBackgroundColor={chartPaneBackgroundColor}
-              volumePaneHeight={volumePaneHeight} showAiAnalysisDrawings={showAiAnalysisDrawings}
-              wSignalColor={wSignalColor} wSignalOpacity={wSignalOpacity / 100}
-              showWSignals={showWSignals}
+              showAiAnalysisDrawings={showAiAnalysisDrawings}
               showLTFFibonacci={showLTFFibonacci}
               onHistoricalDataUpdate={handleHistoricalDataUpdate}
+              showWSignals={showWSignals}
+              wSignalColor={wSignalColor}
+              wSignalOpacity={wSignalOpacity}
             />
           </div>
         </div>

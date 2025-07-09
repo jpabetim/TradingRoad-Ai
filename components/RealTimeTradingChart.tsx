@@ -1,14 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import {
   createChart, IChartApi, ISeriesApi,
-  CandlestickData as LWCCandlestickData, LineData as LWCLineData, HistogramData as LWCHistogramData,
-  LineStyle, UTCTimestamp, PriceScaleMode, IPriceLine, DeepPartial, ChartOptions, SeriesMarker, Time, ColorType,
-  CandlestickSeriesOptions, LineSeriesOptions, HistogramSeriesOptions, LineWidth
+  CandlestickData as LWCCandlestickData,
+  LineStyle, UTCTimestamp, IPriceLine, ColorType
 } from 'lightweight-charts';
-import pako from 'pako';
-import { DataSource, GeminiAnalysisResult, TickerData, AnalysisPointType, MovingAverageConfig, FibonacciLevel, MarketDataPoint } from '../types';
+import { DataSource, GeminiAnalysisResult, MovingAverageConfig, MarketDataPoint } from '../types';
 import { mapTimeframeToApi } from '../constants';
 import { generateUUID } from '../utils/uuid';
+import { calculateFibonacciRetracements } from '../utils/fibonacci';
+import { calculateMA, calculateEMA } from '../utils/movingAverages';
 
 type Theme = 'dark' | 'light';
 
@@ -22,111 +22,91 @@ interface RealTimeTradingChartProps {
   movingAverages: MovingAverageConfig[];
   theme: Theme;
   chartPaneBackgroundColor: string;
-  volumePaneHeight: number;
   showAiAnalysisDrawings: boolean;
+  showLTFFibonacci: boolean;
+  onHistoricalDataUpdate: (data: MarketDataPoint[]) => void;
+  showWSignals: boolean;
   wSignalColor: string;
   wSignalOpacity: number;
-  showWSignals: boolean;
-  showLTFFibonacci: boolean; // Prop para controlar el Fibo LTF
-  onHistoricalDataUpdate: (data: MarketDataPoint[]) => void;
 }
 
 type CandlestickData = LWCCandlestickData<UTCTimestamp> & { volume?: number };
-type LineData = LWCLineData<UTCTimestamp>;
-type HistogramData = LWCHistogramData<UTCTimestamp>;
 
-interface BaseProviderConfig {
-  name: string;
-  historicalApi: (symbol: string, interval: string) => string;
-  formatSymbol: (s: string) => string;
-  parseKline: (data: any) => CandlestickData;
-  parseTicker: (data: any, currentSymbol: string, currentProvider: DataSource) => Partial<TickerData>;
-}
+const isDataPointValid = (item: any): boolean => {
+  return item &&
+    typeof item.time === 'number' && !isNaN(item.time) && item.time > 0 &&
+    typeof item.open === 'number' && !isNaN(item.open) &&
+    typeof item.high === 'number' && !isNaN(item.high) &&
+    typeof item.low === 'number' && !isNaN(item.low) &&
+    typeof item.close === 'number' && !isNaN(item.close) &&
+    (item.volume === undefined || (typeof item.volume === 'number' && !isNaN(item.volume)));
+};
 
-interface BinanceProviderConfig extends BaseProviderConfig {
-  type: 'binance';
-  wsKline: (symbol: string, interval: string) => string;
-  wsTicker: (symbol: string) => string;
-  parseHistorical: (data: any[]) => CandlestickData[];
-}
-
-interface BingXProviderConfig extends BaseProviderConfig {
-  type: 'bingx';
-  wsBase: string;
-  getKlineSubMessage: (symbol: string, interval: string) => string;
-  getTickerSubMessage: (symbol: string) => string;
-  parseHistorical: (allOriginsResponse: any) => CandlestickData[];
-}
-
-type CurrentProviderConfig = BinanceProviderConfig | BingXProviderConfig;
-
-const PROVIDERS_CONFIG: { binance: BinanceProviderConfig; bingx: BingXProviderConfig } = {
+const PROVIDERS_CONFIG = {
   binance: {
-    type: 'binance',
-    name: 'Binance Futures',
-    historicalApi: (symbol, interval) => `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=500`,
-    wsKline: (symbol, interval) => `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,
-    wsTicker: (symbol) => `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@ticker`,
-    formatSymbol: (s) => s.replace(/[^A-Z0-9]/g, '').toUpperCase(),
-    parseHistorical: (data) => data.map(k => ({ time: k[0] / 1000 as UTCTimestamp, open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) })),
-    parseKline: (data) => ({ time: data.k.t / 1000 as UTCTimestamp, open: parseFloat(data.k.o), high: parseFloat(data.k.h), low: parseFloat(data.k.l), close: parseFloat(data.k.c), volume: parseFloat(data.k.v) }),
-    parseTicker: (data, currentSymbol, currentProvider) => ({ price: parseFloat(data.c), changePercent: parseFloat(data.P), volume: parseFloat(data.v), quoteVolume: parseFloat(data.q), symbol: currentSymbol, provider: currentProvider })
+    historicalApi: (symbol: string, interval: string) => `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=500`,
+    wsKline: (symbol: string, interval: string) => `wss://fstream.binance.com/ws/${symbol.toLowerCase()}@kline_${interval}`,
+    parseHistorical: (data: any[]): CandlestickData[] => {
+      if (!Array.isArray(data)) return [];
+      return data
+        .map((k: any) => ({
+          time: Math.floor(Number(k?.[0]) / 1000) as UTCTimestamp,
+          open: parseFloat(k?.[1]), high: parseFloat(k?.[2]),
+          low: parseFloat(k?.[3]), close: parseFloat(k?.[4]),
+          volume: parseFloat(k?.[5]),
+        }))
+        .filter(isDataPointValid).sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
+    },
+    parseKline: (data: any): CandlestickData | null => {
+      const item = {
+        time: Math.floor(Number(data?.k?.t) / 1000) as UTCTimestamp,
+        open: parseFloat(data?.k?.o), high: parseFloat(data?.k?.h),
+        low: parseFloat(data?.k?.l), close: parseFloat(data?.k?.c),
+        volume: parseFloat(data?.k?.v)
+      };
+      return isDataPointValid(item) ? item : null;
+    },
   },
   bingx: {
-    type: 'bingx',
-    name: 'BingX Futures',
-    historicalApi: (symbol, interval) => `https://api.allorigins.win/raw?url=https://open-api.bingx.com/openApi/swap/v2/quote/klines?symbol=${symbol}&interval=${interval}&limit=500`,
+    historicalApi: (symbol: string, interval: string) => `https://api.allorigins.win/raw?url=https://open-api.bingx.com/openApi/swap/v2/quote/klines?symbol=${symbol}&interval=${interval}&limit=500`,
     wsBase: 'wss://open-api-swap.bingx.com/swap-market',
-    formatSymbol: (s) => s.toUpperCase(),
+    getKlineSubMessage: (symbol: string, interval: string) => JSON.stringify({ id: generateUUID(), reqType: 'sub', dataType: `${symbol}@kline_${interval}` }),
     parseHistorical: (allOriginsParsedResponse: any): CandlestickData[] => {
       if (allOriginsParsedResponse && typeof allOriginsParsedResponse.contents === 'string') {
         try {
           const bingxApiResponse = JSON.parse(allOriginsParsedResponse.contents);
           if (bingxApiResponse && bingxApiResponse.code === "0" && Array.isArray(bingxApiResponse.data)) {
-            return bingxApiResponse.data.map(k => ({
-              time: k.time / 1000 as UTCTimestamp,
-              open: parseFloat(k.open),
-              high: parseFloat(k.high),
-              low: parseFloat(k.low),
-              close: parseFloat(k.close),
-              volume: parseFloat(k.volume)
-            }));
-          } else {
-            throw new Error(`BingX API error: ${bingxApiResponse?.msg || "Malformed data in 'contents'."}`);
+            return bingxApiResponse.data
+              .map((k: any) => ({
+                time: Math.floor(Number(k.time) / 1000) as UTCTimestamp,
+                open: parseFloat(k.open), high: parseFloat(k.high),
+                low: parseFloat(k.low), close: parseFloat(k.close),
+                volume: parseFloat(k.volume)
+              }))
+              .filter(isDataPointValid)
+              .sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
           }
         } catch (e) {
-          throw new Error("Error parsing BingX 'contents' string from allorigins.win as JSON.");
+          console.error("Error parsing BingX JSON:", e);
         }
-      } else {
-        throw new Error("Invalid response structure from allorigins.win proxy for BingX historical data.");
       }
+      return [];
     },
-    getKlineSubMessage: (symbol, interval) => JSON.stringify({ id: generateUUID(), reqType: 'sub', dataType: `${symbol}@kline_${interval}` }),
-    getTickerSubMessage: (symbol) => JSON.stringify({ id: generateUUID(), reqType: 'sub', dataType: `${symbol}@trade` }),
-    parseKline: (data) => ({ time: data.T / 1000 as UTCTimestamp, open: parseFloat(data.o), high: parseFloat(data.h), low: parseFloat(data.l), close: parseFloat(data.c), volume: parseFloat(data.v) }),
-    parseTicker: (data, currentSymbol, currentProvider) => ({ price: parseFloat(data.p), symbol: currentSymbol, provider: currentProvider })
+    parseKline: (data: any): CandlestickData | null => {
+      const item = {
+        time: Math.floor(Number(data?.T) / 1000) as UTCTimestamp,
+        open: parseFloat(data?.o), high: parseFloat(data?.h),
+        low: parseFloat(data?.l), close: parseFloat(data?.c),
+        volume: parseFloat(data?.v)
+      };
+      return isDataPointValid(item) ? item : null;
+    }
   }
 };
 
-export const calculateMA = (data: CandlestickData[], period: number): LineData[] => {
-  if (data.length < period) return [];
-  const results: LineData[] = [];
-  for (let i = period - 1; i < data.length; i++) {
-    let sum = 0; for (let j = 0; j < period; j++) { sum += data[i - j].close; }
-    results.push({ time: data[i].time, value: sum / period });
-  }
-  return results;
-};
-
-export const calculateEMA = (data: CandlestickData[], period: number): LineData[] => {
-  if (data.length < period) return [];
-  const results: LineData[] = []; const k = 2 / (period + 1);
-  let sumForSma = 0; for (let i = 0; i < period; i++) { sumForSma += data[i].close; }
-  let ema = sumForSma / period; results.push({ time: data[period - 1].time, value: ema });
-  for (let i = period; i < data.length; i++) {
-    ema = (data[i].close - ema) * k + ema; results.push({ time: data[i].time, value: ema });
-  }
-  return results;
+const THEME_COLORS = {
+  light: { text: '#000000', grid: '#e5e7eb', fiboRetracement: 'rgba(59, 130, 246, 0.7)', fiboExtension: 'rgba(249, 115, 22, 0.7)' },
+  dark: { text: '#FFFFFF', grid: '#1e293b', fiboRetracement: 'rgba(96, 165, 250, 0.7)', fiboExtension: 'rgba(251, 146, 60, 0.7)' }
 };
 
 const isColorLight = (hexColor: string): boolean => {
@@ -141,278 +121,575 @@ const isColorLight = (hexColor: string): boolean => {
   return ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.5;
 };
 
-const THEME_COLORS = {
-  light: { background: '#FFFFFF', text: '#000000', grid: '#e5e7eb', border: '#d1d5db', fiboRetracement: 'rgba(59, 130, 246, 0.7)', fiboExtension: 'rgba(249, 115, 22, 0.7)' },
-  dark: { background: '#0f172a', text: '#FFFFFF', grid: '#1e293b', border: '#334155', fiboRetracement: 'rgba(96, 165, 250, 0.7)', fiboExtension: 'rgba(251, 146, 60, 0.7)' }
-};
-
-const getChartLayoutOptions = (
-  effectiveBackgroundColor: string, effectiveTextColor: string, gridColor: string, borderColor: string
-): DeepPartial<ChartOptions> => ({
-  layout: {
-    background: { type: ColorType.Solid, color: effectiveBackgroundColor },
-    textColor: effectiveTextColor
-  },
-  grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
-});
-
-
 const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
-  dataSource, symbol: rawSymbol, timeframe: rawTimeframe, analysisResult,
+  dataSource, symbol, timeframe, analysisResult,
   onLatestChartInfoUpdate, onChartLoadingStateChange, movingAverages, theme,
-  chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-  wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci,
-  onHistoricalDataUpdate
+  chartPaneBackgroundColor, showAiAnalysisDrawings, showLTFFibonacci,
+  onHistoricalDataUpdate, showWSignals, wSignalColor, wSignalOpacity
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'>>(null);
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'>>(null);
-  const analysisPriceLinesRef = useRef<IPriceLine[]>([]);
-  const maSeriesRefs = useRef<Record<string, ISeriesApi<'Line'>>>({});
-  const volumePriceScaleIdRef = useRef<string | null>(null);
-
+  const chartApiRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<{ main: ISeriesApi<'Candlestick'> | null; volume: ISeriesApi<'Histogram'> | null; ma: Map<string, ISeriesApi<'Line'>> }>({ main: null, volume: null, ma: new Map() });
+  const priceLinesRef = useRef<IPriceLine[]>([]);
+  const markersRef = useRef<any[]>([]);
   const [historicalData, setHistoricalData] = useState<CandlestickData[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'ok' | 'error'>('connecting');
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const providerConf = PROVIDERS_CONFIG[dataSource];
-  const formattedSymbol = rawSymbol && providerConf ? providerConf.formatSymbol(rawSymbol) : '';
-  const apiTimeframe = mapTimeframeToApi(rawTimeframe);
-
-  const getStrokeColor = (type: AnalysisPointType | string, isFvg: boolean = false): string => {
-    const opacity = isFvg ? '0.3' : '0.7';
-    switch (type) {
-      case AnalysisPointType.POI_OFERTA:
-      case AnalysisPointType.FVG_BAJISTA:
-        return `rgba(239, 68, 68, ${opacity})`;
-      case AnalysisPointType.POI_DEMANDA:
-      case AnalysisPointType.FVG_ALCISTA:
-        return `rgba(34, 197, 94, ${opacity})`;
-      case AnalysisPointType.LIQUIDEZ_COMPRADORA:
-        return `rgba(59, 130, 246, ${opacity})`;
-      case AnalysisPointType.LIQUIDEZ_VENDEDORA:
-        return `rgba(249, 115, 22, ${opacity})`;
-      default: return `rgba(156, 163, 175, ${opacity})`;
-    }
-  };
+  const apiTimeframe = useMemo(() => mapTimeframeToApi(timeframe), [timeframe]);
+  const providerConf = useMemo(() => PROVIDERS_CONFIG[dataSource], [dataSource]);
 
   useEffect(() => {
     const chartEl = chartContainerRef.current;
-    if (!chartEl || !formattedSymbol || !providerConf) {
-      onChartLoadingStateChange(false);
-      return;
+    if (!chartEl || !providerConf || !symbol) return;
+
+    // Set loading states
+    setIsInitializing(true);
+    onChartLoadingStateChange(true);
+    setHistoricalData([]);
+
+    // Close existing WebSocket
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
-    onChartLoadingStateChange(true);
-    onLatestChartInfoUpdate({ price: null, volume: null });
-    setHistoricalData([]);
-    maSeriesRefs.current = {};
-
-    const effectiveBackgroundColor = chartPaneBackgroundColor || (theme === 'dark' ? THEME_COLORS.dark.background : THEME_COLORS.light.background);
-    const scaleTextColor = isColorLight(effectiveBackgroundColor) ? THEME_COLORS.light.text : THEME_COLORS.dark.text;
-    const gridColor = theme === 'dark' ? THEME_COLORS.dark.grid : THEME_COLORS.light.grid;
-    const borderColor = theme === 'dark' ? THEME_COLORS.dark.border : THEME_COLORS.light.border;
-
-    const chartBaseOptions: DeepPartial<ChartOptions> = {
-      ...getChartLayoutOptions(effectiveBackgroundColor, scaleTextColor, gridColor, borderColor),
-      autoSize: true,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: apiTimeframe.includes('m'),
-        borderColor: borderColor,
-      },
-      rightPriceScale: {
-        mode: PriceScaleMode.Logarithmic,
-        borderColor: borderColor,
-        textColor: scaleTextColor,
-        scaleMargins: { top: 0.1, bottom: 0.05 },
-      },
-    };
-
-    if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
-    chartRef.current = createChart(chartEl, chartBaseOptions);
-
-    candlestickSeriesRef.current = chartRef.current.addCandlestickSeries({
-      upColor: '#22C55E', downColor: '#EF4444', borderDownColor: '#EF4444', borderUpColor: '#22C55E',
-      wickDownColor: '#EF4444', wickUpColor: '#22C55E',
-    });
-
-    const volId = `volume_ps`;
-    volumePriceScaleIdRef.current = volId;
-    volumeSeriesRef.current = chartRef.current.addHistogramSeries({
-      priceFormat: { type: 'volume' },
-      priceScaleId: volId,
-    });
-    chartRef.current.priceScale(volId).applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
-      borderColor: borderColor,
-    });
-
-    const fetchHistoricalData = async () => {
-      const apiUrl = providerConf.historicalApi(formattedSymbol, apiTimeframe);
+    // Clean up existing chart safely
+    if (chartApiRef.current) {
       try {
-        const response = await fetch(apiUrl);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const rawData = await response.json();
-        const parsedData = providerConf.parseHistorical(rawData).sort((a, b) => a.time - b.time);
-        setHistoricalData(parsedData);
-        candlestickSeriesRef.current?.setData(parsedData);
-        const volumeData = parsedData.map(d => ({ time: d.time, value: d.volume ?? 0, color: d.close > d.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' }));
-        volumeSeriesRef.current?.setData(volumeData);
-        if (parsedData.length > 0) {
-          onLatestChartInfoUpdate({ price: parsedData[parsedData.length - 1].close, volume: parsedData[parsedData.length - 1].volume });
-        }
+        // Clear price lines and markers first
+        priceLinesRef.current = [];
+        markersRef.current = [];
+
+        // Remove MA series
+        seriesRef.current.ma.forEach((series, key) => {
+          if (series) {
+            try {
+              chartApiRef.current?.removeSeries(series);
+            } catch (error) {
+              console.warn(`Error removing MA series ${key}:`, error);
+            }
+          }
+        });
+        seriesRef.current.ma.clear();
+
+        // Remove the chart
+        chartApiRef.current.remove();
       } catch (error) {
-        console.error(`Failed to fetch historical data from ${apiUrl}:`, error);
-        setConnectionStatus('error');
-      } finally {
+        console.warn('Error cleaning up chart:', error);
+      }
+      chartApiRef.current = null;
+      seriesRef.current = { main: null, volume: null, ma: new Map() };
+    }
+
+    // Small delay to ensure cleanup is complete before creating new chart
+    const initTimeout = setTimeout(() => {
+      if (!chartEl) return;      try {
+        const chart = createChart(chartEl, {
+          autoSize: true,
+          layout: {
+            background: { type: ColorType.Solid, color: theme === 'dark' ? '#0f172a' : '#FFFFFF' },
+            textColor: theme === 'dark' ? '#FFFFFF' : '#000000'
+          },
+          grid: {
+            vertLines: { 
+              color: theme === 'dark' ? 'rgba(51, 65, 85, 0.3)' : 'rgba(229, 231, 235, 0.5)',
+              style: LineStyle.Solid,
+              visible: true
+            },
+            horzLines: { 
+              color: theme === 'dark' ? 'rgba(51, 65, 85, 0.3)' : 'rgba(229, 231, 235, 0.5)',
+              style: LineStyle.Solid,
+              visible: true
+            }
+          }
+        });
+
+        chartApiRef.current = chart;
+
+        seriesRef.current.main = chart.addCandlestickSeries({
+          upColor: '#22C55E',
+          downColor: '#EF4444',
+          borderVisible: false,
+          wickUpColor: '#22C55E',
+          wickDownColor: '#EF4444'
+        });
+
+        seriesRef.current.volume = chart.addHistogramSeries({
+          priceFormat: { type: 'volume' },
+          priceScaleId: ''
+        });
+        seriesRef.current.volume.priceScale().applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 }
+        });
+
+        let isMounted = true;
+
+        // Set a safety timeout
+        loadingTimeoutRef.current = setTimeout(() => {
+          if (isInitializing) {
+            console.warn('Chart loading timeout - forcing completion');
+            setIsInitializing(false);
+            onChartLoadingStateChange(false);
+          }
+        }, 10000); // 10 second timeout
+
+        // Fetch historical data
+        fetch(providerConf.historicalApi(symbol, apiTimeframe))
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            if (!isMounted) return;
+            
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current);
+              loadingTimeoutRef.current = null;
+            }
+
+            const parsedData = providerConf.parseHistorical(data);
+            if (parsedData.length > 0) {
+              setHistoricalData(parsedData);
+              onHistoricalDataUpdate(parsedData);
+              onLatestChartInfoUpdate({
+                price: parsedData[parsedData.length - 1].close,
+                volume: parsedData[parsedData.length - 1].volume
+              });
+            }
+          })
+          .catch(error => {
+            console.error("Failed to fetch historical data:", error);
+            if (loadingTimeoutRef.current) {
+              clearTimeout(loadingTimeoutRef.current);
+              loadingTimeoutRef.current = null;
+            }
+            // Don't leave the user with a blank screen - show an error state
+            setHistoricalData([]);
+          })
+          .finally(() => {
+            if (isMounted) {
+              setIsInitializing(false);
+              onChartLoadingStateChange(false);
+
+              // Initialize WebSocket after data is loaded
+              try {
+                if (dataSource === 'binance' && 'wsKline' in providerConf) {
+                  const ws = new WebSocket(providerConf.wsKline(symbol, apiTimeframe));
+                  wsRef.current = ws;
+
+                  ws.onopen = () => {
+                    console.log('WebSocket connected');
+                  };
+
+                  ws.onmessage = (event) => {
+                    try {
+                      const message = JSON.parse(event.data);
+                      const kline = providerConf.parseKline(message);
+                      if (kline && seriesRef.current.main && seriesRef.current.volume) {
+                        seriesRef.current.main.update(kline);
+                        seriesRef.current.volume.update({
+                          time: kline.time,
+                          value: kline.volume ?? 0,
+                          color: kline.close >= kline.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+                        });
+                        onLatestChartInfoUpdate({ price: kline.close, volume: kline.volume });
+                      }
+                    } catch (error) {
+                      console.error('Error processing WebSocket message:', error);
+                    }
+                  };
+
+                  ws.onerror = (error) => {
+                    console.error("WebSocket Error:", error);
+                  };
+
+                  ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                  };
+
+                } else if (dataSource === 'bingx' && 'wsBase' in providerConf) {
+                  const ws = new WebSocket(providerConf.wsBase);
+                  wsRef.current = ws;
+
+                  ws.onopen = () => {
+                    console.log('BingX WebSocket connected');
+                    if (ws && 'getKlineSubMessage' in providerConf) {
+                      ws.send(providerConf.getKlineSubMessage(symbol, apiTimeframe));
+                    }
+                  };
+
+                  ws.onmessage = (event) => {
+                    try {
+                      const message = JSON.parse(event.data);
+                      const kline = providerConf.parseKline(message);
+                      if (kline && seriesRef.current.main && seriesRef.current.volume) {
+                        seriesRef.current.main.update(kline);
+                        seriesRef.current.volume.update({
+                          time: kline.time,
+                          value: kline.volume ?? 0,
+                          color: kline.close >= kline.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+                        });
+                        onLatestChartInfoUpdate({ price: kline.close, volume: kline.volume });
+                      }
+                    } catch (error) {
+                      console.error('Error processing BingX WebSocket message:', error);
+                    }
+                  };
+
+                  ws.onerror = (error) => {
+                    console.error("BingX WebSocket Error:", error);
+                  };
+
+                  ws.onclose = () => {
+                    console.log('BingX WebSocket disconnected');
+                  };
+                }
+              } catch (error) {
+                console.error('Error initializing WebSocket:', error);
+              }
+            }
+          });
+
+        // Cleanup function for this effect
+        return () => {
+          isMounted = false;
+          if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+          }
+        };
+
+      } catch (error) {
+        console.error('Error creating chart:', error);
+        setIsInitializing(false);
         onChartLoadingStateChange(false);
       }
-    };
-    fetchHistoricalData();
+    }, 100); // Small delay to ensure DOM is ready
 
-    let ws: WebSocket | null = null;
-    const setupWebSocket = () => {
-      if (providerConf.type === 'binance') {
-        ws = new WebSocket(providerConf.wsKline(formattedSymbol, apiTimeframe));
-      } else if (providerConf.type === 'bingx') {
-        ws = new WebSocket(providerConf.wsBase);
-        ws.onopen = () => ws?.send(providerConf.getKlineSubMessage(formattedSymbol, apiTimeframe));
-      }
-
-      if (ws) {
-        ws.onopen = () => setConnectionStatus('ok');
-        ws.onmessage = (event) => {
-          // WebSocket message processing logic here...
-        };
-        ws.onerror = () => setConnectionStatus('error');
-        ws.onclose = () => setConnectionStatus('connecting');
-      }
-    };
-    setupWebSocket();
-
+    // Cleanup function for the main effect
     return () => {
-      ws?.close();
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
+      clearTimeout(initTimeout);
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      if (chartApiRef.current) {
+        try {
+          priceLinesRef.current = [];
+          markersRef.current = [];
+          seriesRef.current.ma.forEach((series, key) => {
+            if (series) {
+              try {
+                chartApiRef.current?.removeSeries(series);
+              } catch (error) {
+                console.warn(`Error removing MA series ${key} on cleanup:`, error);
+              }
+            }
+          });
+          seriesRef.current.ma.clear();
+          chartApiRef.current.remove();
+        } catch (error) {
+          console.warn('Error removing chart on cleanup:', error);
+        }
+        chartApiRef.current = null;
+        seriesRef.current = { main: null, volume: null, ma: new Map() };
       }
     };
-  }, [dataSource, rawSymbol, rawTimeframe, theme, chartPaneBackgroundColor]);
+  }, [symbol, timeframe, dataSource, theme]);
 
   useEffect(() => {
-    if (!chartRef.current || historicalData.length === 0) return;
+    const chart = chartApiRef.current;
+    if (!chart) return;
 
-    Object.values(maSeriesRefs.current).forEach(series => chartRef.current?.removeSeries(series));
-    maSeriesRefs.current = {};
+    const effectiveBgColor = chartPaneBackgroundColor || (theme === 'dark' ? '#0f172a' : '#FFFFFF');
+    const textColor = isColorLight(effectiveBgColor) ? '#000000' : '#FFFFFF';
+    const gridColor = theme === 'dark' ? '#1e293b' : '#e5e7eb';
 
-    movingAverages.forEach(maConfig => {
-      if (maConfig.visible && historicalData.length >= maConfig.period) {
-        const maData = maConfig.type === 'EMA'
-          ? calculateEMA(historicalData, maConfig.period)
-          : calculateMA(historicalData, maConfig.period);
+    chart.applyOptions({
+      layout: { background: { type: ColorType.Solid, color: effectiveBgColor }, textColor },
+      grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+    });
+  }, [theme, chartPaneBackgroundColor]);
 
-        const maSeries = chartRef.current?.addLineSeries({
-          color: maConfig.color,
-          lineWidth: 1,
-          lastValueVisible: false,
-          priceLineVisible: false,
-        });
-        maSeries?.setData(maData);
-        if (maSeries) {
-          maSeriesRefs.current[maConfig.id] = maSeries;
+  useEffect(() => {
+    if (historicalData.length > 0 && seriesRef.current.main && seriesRef.current.volume) {
+      seriesRef.current.main.setData(historicalData);
+      const volumeData = historicalData.map(d => ({ time: d.time, value: d.volume ?? 0, color: d.close >= d.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' }));
+      seriesRef.current.volume.setData(volumeData);
+    }
+  }, [historicalData]);
+
+  useEffect(() => {
+    const chart = chartApiRef.current;
+    const candlestickSeries = seriesRef.current.main;
+    if (!chart || !candlestickSeries || historicalData.length === 0) return;
+
+    // Safely remove existing MA series
+    seriesRef.current.ma.forEach((series, key) => {
+      if (series) {
+        try {
+          chart.removeSeries(series);
+        } catch (error) {
+          console.warn(`Error removing MA series ${key}:`, error);
+        }
+      }
+    });
+    seriesRef.current.ma.clear();
+
+    movingAverages.forEach(ma => {
+      if (ma.visible && historicalData.length >= ma.period) {
+        const maData = ma.type === 'EMA' ? calculateEMA(historicalData, ma.period) : calculateMA(historicalData, ma.period);
+        if (maData.length > 0) {
+          const maSeries = chart.addLineSeries({
+            color: ma.color,
+            lineWidth: 1,
+            lastValueVisible: false,
+            priceLineVisible: false,
+          });
+          maSeries.setData(maData);
+          seriesRef.current.ma.set(ma.id, maSeries);
         }
       }
     });
   }, [movingAverages, historicalData]);
 
-  const calculateFibonacciRetracements = (start: number, end: number) => {
-    const diff = end - start;
-    const isUptrend = end > start;
-    const keyLevels = [0, 0.382, 0.5, 0.618, 1.0];
-    return keyLevels.map(level => ({ level, price: isUptrend ? end - (diff * level) : start + (diff * level), label: `${(level * 100).toFixed(1)}%` }));
-  };
-
-  const calculateFibonacciExtensions = (start: number, end: number, retracement: number) => {
-    const diff = end - start;
-    const isUptrend = end > start;
-    const retracementDiff = retracement - end;
-    const keyLevels = [1.272, 1.618, 2.618];
-    return keyLevels.map(level => ({ level, price: isUptrend ? retracement + (Math.abs(retracementDiff) * level) : retracement - (Math.abs(retracementDiff) * level), label: `Ext ${(level * 100).toFixed(1)}%` }));
-  };
-
   useEffect(() => {
-    const chart = chartRef.current;
-    const currentSeries = candlestickSeriesRef.current;
+    const candlestickSeries = seriesRef.current.main;
+    if (!candlestickSeries) return;
 
-    if (!chart || !currentSeries) return;
+    // Clear existing price lines and markers
+    priceLinesRef.current.forEach(line => candlestickSeries.removePriceLine(line));
+    priceLinesRef.current = [];
+    markersRef.current = [];
 
-    analysisPriceLinesRef.current.forEach(line => currentSeries.removePriceLine(line));
-    analysisPriceLinesRef.current = [];
+    const drawLine = (price: number, options: any) => {
+      const line = candlestickSeries.createPriceLine({
+        price,
+        ...options
+      });
+      priceLinesRef.current.push(line);
+    };
+
+    const drawZone = (minPrice: number, maxPrice: number, color: string, title?: string) => {
+      // Draw zone as two horizontal lines
+      drawLine(minPrice, {
+        color: color,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: title ? `${title} (Bottom)` : 'Zone Bottom',
+      });
+      drawLine(maxPrice, {
+        color: color,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: title ? `${title} (Top)` : 'Zone Top',
+      });
+    };
+
+    const createMarker = (point: any, color: string, shape: any, position: any) => {
+      if (point.marker_time && historicalData.length > 0) {
+        return {
+          time: point.marker_time as any,
+          position: position,
+          color: color,
+          shape: shape,
+          text: point.marker_text || point.label?.substring(0, 3) || '',
+        };
+      }
+      return null;
+    };
 
     if (analysisResult && showAiAnalysisDrawings) {
-      const { puntos_clave_grafico, analisis_fibonacci } = analysisResult;
+      const allMarkers: any[] = [];
 
-      puntos_clave_grafico?.forEach(point => {
-        const defaultColor = getStrokeColor(point.tipo);
+      // 1. Puntos clave del gráfico
+      analysisResult.puntos_clave_grafico?.forEach(point => {
         if (point.nivel != null) {
-          const isLiquidity = point.tipo === AnalysisPointType.LIQUIDEZ_COMPRADORA || point.tipo === AnalysisPointType.LIQUIDEZ_VENDEDORA;
-          const lineOptions: DeepPartial<IPriceLine> = {
-            price: point.nivel,
-            color: isLiquidity ? '#FFD700' : defaultColor,
-            lineWidth: (isLiquidity ? 2 : 1) as LineWidth,
-            lineStyle: isLiquidity ? LineStyle.Dotted : LineStyle.Dashed,
+          drawLine(point.nivel, {
+            color: '#FFD700',
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: isLiquidity ? `💲 ${point.label}` : point.label,
-          };
-          const line = currentSeries.createPriceLine(lineOptions);
-          analysisPriceLinesRef.current.push(line);
-        } else if (point.zona) {
-          const isFvg = point.tipo === AnalysisPointType.FVG_ALCISTA || point.tipo === AnalysisPointType.FVG_BAJISTA;
-          const zoneColor = getStrokeColor(point.tipo, isFvg);
-          const [minPrice, maxPrice] = point.zona;
-          analysisPriceLinesRef.current.push(
-            currentSeries.createPriceLine({ price: maxPrice, color: zoneColor, lineWidth: isFvg ? 3 : 1, lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted, axisLabelVisible: true, title: `${point.label} (H)` }),
-            currentSeries.createPriceLine({ price: minPrice, color: zoneColor, lineWidth: isFvg ? 3 : 1, lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted, axisLabelVisible: true, title: `${point.label} (L)` })
-          );
+            title: point.label,
+          });
+        }
+        if (point.zona) {
+          drawZone(point.zona[0], point.zona[1], '#FFD700', point.label);
         }
       });
 
-      if (analisis_fibonacci) {
+      // 2. Liquidez Importante
+      if (analysisResult.liquidez_importante) {
+        // Buy-side liquidity (above old highs)
+        analysisResult.liquidez_importante.buy_side?.forEach(point => {
+          if (point.nivel != null) {
+            drawLine(point.nivel, {
+              color: '#22C55E',
+              lineWidth: 2,
+              lineStyle: LineStyle.Solid,
+              axisLabelVisible: true,
+              title: `BSL: ${point.label}`,
+            });
+          }
+          const marker = createMarker(point, '#22C55E', 'arrowUp', 'belowBar');
+          if (marker) allMarkers.push(marker);
+        });
+
+        // Sell-side liquidity (below old lows)
+        analysisResult.liquidez_importante.sell_side?.forEach(point => {
+          if (point.nivel != null) {
+            drawLine(point.nivel, {
+              color: '#EF4444',
+              lineWidth: 2,
+              lineStyle: LineStyle.Solid,
+              axisLabelVisible: true,
+              title: `SSL: ${point.label}`,
+            });
+          }
+          const marker = createMarker(point, '#EF4444', 'arrowDown', 'aboveBar');
+          if (marker) allMarkers.push(marker);
+        });
+      }
+
+      // 3. Zonas Críticas de Oferta y Demanda
+      if (analysisResult.zonas_criticas_oferta_demanda) {
+        // Order Blocks de Oferta (Supply/Bearish OB)
+        analysisResult.zonas_criticas_oferta_demanda.oferta_clave?.forEach(point => {
+          if (point.zona) {
+            drawZone(point.zona[0], point.zona[1], '#DC2626', `OB Supply: ${point.label}`);
+          } else if (point.nivel != null) {
+            drawLine(point.nivel, {
+              color: '#DC2626',
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: `Supply: ${point.label}`,
+            });
+          }
+          const marker = createMarker(point, '#DC2626', 'circle', 'aboveBar');
+          if (marker) allMarkers.push(marker);
+        });
+
+        // Order Blocks de Demanda (Demand/Bullish OB)
+        analysisResult.zonas_criticas_oferta_demanda.demanda_clave?.forEach(point => {
+          if (point.zona) {
+            drawZone(point.zona[0], point.zona[1], '#16A34A', `OB Demand: ${point.label}`);
+          } else if (point.nivel != null) {
+            drawLine(point.nivel, {
+              color: '#16A34A',
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+              title: `Demand: ${point.label}`,
+            });
+          }
+          const marker = createMarker(point, '#16A34A', 'circle', 'belowBar');
+          if (marker) allMarkers.push(marker);
+        });
+
+        // Fair Value Gaps (FVG)
+        analysisResult.zonas_criticas_oferta_demanda.fvg_importantes?.forEach(point => {
+          if (point.zona) {
+            const color = point.tipo?.includes('alcista') ? '#06B6D4' : '#F59E0B';
+            drawZone(point.zona[0], point.zona[1], color, `FVG: ${point.label}`);
+          }
+          const markerColor = point.tipo?.includes('alcista') ? '#06B6D4' : '#F59E0B';
+          const marker = createMarker(point, markerColor, 'square', 'inBar');
+          if (marker) allMarkers.push(marker);
+        });
+      }
+
+      // 4. W-Signals específicas (si están habilitadas)
+      if (showWSignals) {
+        // Buscar señales W en todos los puntos
+        const allPoints = [
+          ...(analysisResult.puntos_clave_grafico || []),
+          ...(analysisResult.liquidez_importante?.buy_side || []),
+          ...(analysisResult.liquidez_importante?.sell_side || []),
+          ...(analysisResult.zonas_criticas_oferta_demanda?.oferta_clave || []),
+          ...(analysisResult.zonas_criticas_oferta_demanda?.demanda_clave || []),
+          ...(analysisResult.zonas_criticas_oferta_demanda?.fvg_importantes || [])
+        ];
+
+        allPoints.forEach(point => {
+          if (point.tipo?.includes('w_signal') || point.tipo?.includes('AI_W_SIGNAL')) {
+            const isWBullish = point.tipo?.includes('bullish') || point.tipo?.includes('alcista');
+            const marker = createMarker(
+              point,
+              wSignalColor,
+              isWBullish ? 'arrowUp' : 'arrowDown',
+              isWBullish ? 'belowBar' : 'aboveBar'
+            );
+            if (marker) {
+              marker.text = 'W';
+              // Apply opacity to W-Signal color
+              marker.color = `${wSignalColor}${Math.round(wSignalOpacity * 255).toString(16).padStart(2, '0')}`;
+              allMarkers.push(marker);
+            }
+          }
+        });
+      }
+
+      // 5. Aplicar todos los marcadores
+      if (allMarkers.length > 0) {
+        candlestickSeries.setMarkers(allMarkers);
+        markersRef.current = allMarkers;
+      }
+
+      // 6. Fibonacci Analysis
+      if (analysisResult.analisis_fibonacci) {
+        const { htf, ltf } = analysisResult.analisis_fibonacci;
         const fiboColors = theme === 'dark' ? THEME_COLORS.dark : THEME_COLORS.light;
-        const drawFiboForImpulse = (impulse: any, style: { color: string, lineStyle: LineStyle }) => {
-          if (!impulse || impulse.precio_inicio_impulso == null || impulse.precio_fin_impulso == null) return;
-          const retracements = calculateFibonacciRetracements(impulse.precio_inicio_impulso, impulse.precio_fin_impulso);
-          const extensions = impulse.precio_fin_retroceso != null ? calculateFibonacciExtensions(impulse.precio_inicio_impulso, impulse.precio_fin_impulso, impulse.precio_fin_retroceso) : [];
-          [...retracements, ...extensions].forEach(level => {
-            analysisPriceLinesRef.current.push(currentSeries.createPriceLine({ price: level.price, color: style.color, lineWidth: (level.level === 0.618 || level.level === 1.618) ? 2 : 1, lineStyle: style.lineStyle, axisLabelVisible: true, title: `${level.label} (${impulse.temporalidad_analizada})` }));
-          });
-        };
-        if (analisis_fibonacci.htf) {
-          drawFiboForImpulse(analisis_fibonacci.htf, { color: fiboColors.fiboRetracement, lineStyle: LineStyle.Dashed });
+
+        if (htf) {
+          calculateFibonacciRetracements(htf.precio_inicio_impulso, htf.precio_fin_impulso)
+            .forEach(level => drawLine(level.price, { 
+              color: fiboColors.fiboRetracement, 
+              lineStyle: LineStyle.Dotted, 
+              axisLabelVisible: true, 
+              title: `${level.label} HTF` 
+            }));
         }
-        if (analisis_fibonacci.ltf && showLTFFibonacci) {
-          drawFiboForImpulse(analisis_fibonacci.ltf, { color: fiboColors.fiboExtension, lineStyle: LineStyle.Dotted });
+        if (ltf && showLTFFibonacci) {
+          calculateFibonacciRetracements(ltf.precio_inicio_impulso, ltf.precio_fin_impulso)
+            .forEach(level => drawLine(level.price, { 
+              color: fiboColors.fiboExtension, 
+              lineStyle: LineStyle.Dotted, 
+              axisLabelVisible: true, 
+              title: `${level.label} LTF` 
+            }));
         }
       }
     }
-  }, [analysisResult, showAiAnalysisDrawings, theme, wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci]);
-
-  useEffect(() => {
-    if (historicalData.length > 0 && onHistoricalDataUpdate) {
-      onHistoricalDataUpdate(historicalData.map(candle => ({ ...candle })));
-    }
-  }, [historicalData, onHistoricalDataUpdate]);
-
-  interface WebSocketCloseEvent extends Event {
-    readonly code: number;
-    readonly reason: string;
-    readonly wasClean: boolean;
-  }
+  }, [analysisResult, showAiAnalysisDrawings, showLTFFibonacci, showWSignals, wSignalColor, theme, historicalData]);
 
   return (
-    <div ref={chartContainerRef} className="w-full h-full relative">
-      {connectionStatus === 'error' && <div className="absolute top-2 left-2 bg-red-500 text-white p-2 rounded text-xs z-10">Connection Error</div>}
+    <div className="w-full h-full relative">
+      <div ref={chartContainerRef} className="w-full h-full" />
+      {(isInitializing || !historicalData.length) && (
+        <div className={`absolute inset-0 flex items-center justify-center backdrop-blur-sm ${theme === 'dark' ? 'bg-slate-800/90' : 'bg-white/90'}`}>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500 mx-auto mb-4"></div>
+            <p className={`text-lg font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>
+              {isInitializing ? 'Inicializando gráfico...' : 'Cargando datos...'}
+            </p>
+            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+              {symbol} • {timeframe.toUpperCase()}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

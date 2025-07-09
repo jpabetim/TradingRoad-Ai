@@ -1,5 +1,5 @@
 
-// Constants for TradingRoad AI Analysis App
+// Constants for TradinGuardIAn AI Analysis App
 
 export const DEFAULT_SYMBOL = "ETHUSDT"; // Binance format default
 // These are just examples, user can type any symbol.
