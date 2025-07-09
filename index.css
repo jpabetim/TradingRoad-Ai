@@ -12,3 +12,32 @@ body {
 * {
     box-sizing: border-box;
 }
+
+/* Utilidades móviles adicionales */
+@media (max-width: 640px) {
+    .mobile-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .mobile-hidden {
+        display: none !important;
+    }
+}
+
+/* Mejoras de accesibilidad táctil */
+@media (max-width: 768px) {
+
+    button,
+    select,
+    input[type="text"],
+    textarea {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .touch-friendly {
+        padding: 0.75rem;
+        font-size: 0.875rem;
+    }
+}

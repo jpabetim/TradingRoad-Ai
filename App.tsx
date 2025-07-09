@@ -11,7 +11,6 @@ import { GoogleGenAI, Chat } from "@google/genai";
 import { useTemplateManager, TemplateConfiguration } from './hooks/useTemplateManager';
 import { generateUUID } from './utils/uuid';
 
-// Helper for debouncing
 function debounce<T extends (...args: any[]) => void>(func: T, delay: number): (...args: Parameters<T>) => void {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   return function (this: ThisParameterType<T>, ...args: Parameters<T>) {
@@ -60,7 +59,6 @@ const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {
       try {
         return JSON.parse(storedValue) as T;
       } catch (e) {
-        console.error(`Error parsing localStorage item ${key}:`, e);
         return defaultValue;
       }
     }
@@ -95,23 +93,15 @@ const App: React.FC = () => {
   const [favoriteTimeframes, setFavoriteTimeframes] = useState<string[]>(() => getLocalStorageItem('traderoad_favoriteTimeframes', DEFAULT_FAVORITE_TIMEFRAMES));
   const [theme, setTheme] = useState<Theme>(() => getLocalStorageItem('traderoad_theme', 'dark'));
   const [movingAverages, setMovingAverages] = useState<MovingAverageConfig[]>(() => getLocalStorageItem('traderoad_movingAverages', initialMAs));
+  const [showLTFFibonacci, setShowLTFFibonacci] = useState<boolean>(false);
 
   const initialBgColorBasedOnTheme = theme === 'dark' ? INITIAL_DARK_CHART_PANE_BACKGROUND_COLOR : INITIAL_LIGHT_CHART_PANE_BACKGROUND_COLOR;
-  const [chartPaneBackgroundColor, setChartPaneBackgroundColor] = useState<string>(() =>
-    getLocalStorageItem('traderoad_chartPaneBackgroundColor', initialBgColorBasedOnTheme)
-  );
-
+  const [chartPaneBackgroundColor, setChartPaneBackgroundColor] = useState<string>(() => getLocalStorageItem('traderoad_chartPaneBackgroundColor', initialBgColorBasedOnTheme));
   const [volumePaneHeight, setVolumePaneHeight] = useState<number>(() => getLocalStorageItem('traderoad_volumePaneHeight', INITIAL_VOLUME_PANE_HEIGHT));
   const [showAiAnalysisDrawings, setShowAiAnalysisDrawings] = useState<boolean>(() => getLocalStorageItem('traderoad_showAiAnalysisDrawings', true));
   const [wSignalColor, setWSignalColor] = useState<string>(() => getLocalStorageItem('traderoad_wSignalColor', INITIAL_W_SIGNAL_COLOR));
   const [wSignalOpacity, setWSignalOpacity] = useState<number>(() => getLocalStorageItem('traderoad_wSignalOpacity', INITIAL_W_SIGNAL_OPACITY));
   const [showWSignals, setShowWSignals] = useState<boolean>(() => getLocalStorageItem('traderoad_showWSignals', INITIAL_SHOW_W_SIGNALS));
-
-  // 🆕 Estado para controlar la visibilidad del Fibonacci 1H en el gráfico
-  const [showLTFFibonacci, setShowLTFFibonacci] = useState<boolean>(() => getLocalStorageItem('traderoad_showLTFFibonacci', false));
-
-  // 🆕 Estado para la zona horaria del gráfico
-  const [timezone, setTimezone] = useState<string>(() => getLocalStorageItem('traderoad_timezone', 'UTC'));
 
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyPresent, setApiKeyPresent] = useState<boolean>(false);
@@ -126,7 +116,6 @@ const App: React.FC = () => {
 
   const [analysisPanelMode, setAnalysisPanelMode] = useState<AnalysisPanelMode>('initial');
 
-  // 🆕 Sistema de Gestión de Plantillas
   const templateManager = useTemplateManager();
   const [showTemplateManager, setShowTemplateManager] = useState<boolean>(false);
 
@@ -135,7 +124,6 @@ const App: React.FC = () => {
   const [chatError, setChatError] = useState<string | null>(null);
   const chatSessionRef = useRef<Chat | null>(null);
 
-  // 📝 Paso 1: Estado para los datos históricos del gráfico
   const [historicalData, setHistoricalData] = useState<MarketDataPoint[]>([]);
 
   useEffect(() => {
@@ -152,13 +140,11 @@ const App: React.FC = () => {
       localStorage.setItem('traderoad_wSignalColor', JSON.stringify(wSignalColor));
       localStorage.setItem('traderoad_wSignalOpacity', JSON.stringify(wSignalOpacity));
       localStorage.setItem('traderoad_showWSignals', JSON.stringify(showWSignals));
-      localStorage.setItem('traderoad_showLTFFibonacci', JSON.stringify(showLTFFibonacci));
-      localStorage.setItem('traderoad_timezone', JSON.stringify(timezone));
     }
   }, [
     dataSource, actualSymbol, timeframe, favoriteTimeframes, theme, movingAverages,
     chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-    wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci, timezone
+    wSignalColor, wSignalOpacity, showWSignals
   ]);
 
   useEffect(() => {
@@ -180,25 +166,25 @@ const App: React.FC = () => {
   }, [actualSymbol, timeframe]);
 
   const initializeChatSession = useCallback(() => {
-    if (apiKey && !chatLoading) { // Prevent re-initialization if already loading/processing
+    if (apiKey && !chatLoading) {
       try {
         const ai = new GoogleGenAI({ apiKey });
         chatSessionRef.current = ai.chats.create({
           model: GEMINI_MODEL_NAME,
           config: { systemInstruction: getChatSystemPrompt() },
         });
-        setChatError(null); // Clear previous errors on successful init
+        setChatError(null);
       } catch (e: any) {
         console.error("Failed to initialize chat session:", e);
         setChatError(`Falló la inicialización del chat IA: ${e.message}.`);
-        chatSessionRef.current = null; // Ensure it's null on failure
+        chatSessionRef.current = null;
       }
     }
   }, [apiKey, getChatSystemPrompt, chatLoading]);
 
 
   useEffect(() => {
-    if (apiKeyPresent) { // Only attempt to initialize if API key is marked as present
+    if (apiKeyPresent) {
       initializeChatSession();
     }
   }, [apiKeyPresent, initializeChatSession]);
@@ -228,16 +214,27 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    // Only clear analysis when symbol or data source changes, not on timeframe changes
     setAnalysisResult(null);
     setAnalysisError(null);
-    setAnalysisPanelMode('initial'); // Reset to initial to avoid showing stale analysis for new symbol
+    setAnalysisPanelMode('initial');
   }, [actualSymbol, dataSource]);
 
 
   useEffect(() => {
     setLatestChartInfo({ price: null, volume: null });
   }, [actualSymbol, timeframe, dataSource]);
+
+  // Force re-enable AI signals when timeframe changes if they were enabled
+  useEffect(() => {
+    if (showAiAnalysisDrawings) {
+      // Small delay to allow chart to reload, then re-trigger signals visibility
+      const timer = setTimeout(() => {
+        setShowAiAnalysisDrawings(false);
+        setTimeout(() => setShowAiAnalysisDrawings(true), 50);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [timeframe]);
 
   useEffect(() => {
     const newThemeDefaultBgColor = theme === 'dark' ? INITIAL_DARK_CHART_PANE_BACKGROUND_COLOR : INITIAL_LIGHT_CHART_PANE_BACKGROUND_COLOR;
@@ -253,9 +250,8 @@ const App: React.FC = () => {
   const handleLatestChartInfoUpdate = useCallback((info: LatestChartInfo) => setLatestChartInfo(info), []);
   const handleChartLoadingStateChange = useCallback((chartLoading: boolean) => setIsChartLoading(chartLoading), []);
 
-  // 📝 Paso 2: Función receptora para los datos históricos del gráfico
   const handleHistoricalDataUpdate = useCallback((data: MarketDataPoint[]) => {
-    setHistoricalData(data.slice(-200)); // Usamos slice para quedarnos con las últimas 200 velas
+    setHistoricalData(data.slice(-200));
   }, []);
 
   const handleRequestAnalysis = useCallback(async (forceRegenerate: boolean = false) => {
@@ -272,20 +268,17 @@ const App: React.FC = () => {
 
     const displaySymbolForAI = actualSymbol.includes('-') ? actualSymbol.replace('-', '/') : (actualSymbol.endsWith('USDT') ? actualSymbol.replace(/USDT$/, '/USDT') : actualSymbol);
 
-    // 🔥 MEJORA: Verificar si ya existe un análisis válido para evitar regeneración innecesaria
     if (!forceRegenerate && analysisResult &&
       analysisResult.analisis_general?.simbolo === displaySymbolForAI &&
       analysisResult.analisis_general?.temporalidad_principal_analisis === timeframe.toUpperCase()) {
-      // Ya tenemos un análisis válido para este símbolo y temporalidad, solo mostrar el panel
       setAnalysisPanelMode('analysis');
       return;
     }
 
-    // Solo regenerar análisis cuando es necesario o explícitamente solicitado
     setAnalysisLoading(true);
     setAnalysisError(null);
-    setAnalysisResult(null); // Clear previous result before fetching new one
-    setAnalysisPanelMode('analysis'); // Ensure mode is set
+    setAnalysisResult(null);
+    setAnalysisPanelMode('analysis');
 
     try {
       const payload: ExtendedGeminiRequestPayload = {
@@ -309,7 +302,7 @@ const App: React.FC = () => {
     if (!apiKeyPresent) {
       setChatError("Clave API no configurada. El Chat IA no está disponible.");
     } else if (!chatSessionRef.current) {
-      initializeChatSession(); // Attempt to initialize if not already done
+      initializeChatSession();
     }
   };
 
@@ -318,58 +311,25 @@ const App: React.FC = () => {
 
     if (!chatSessionRef.current) {
       setChatError("La sesión de chat no está inicializada. Intenta de nuevo.");
-      initializeChatSession(); // Attempt to re-initialize
+      initializeChatSession();
       return;
     }
 
     let userTextForAI = messageText.trim();
     const displaySymbolForAI = actualSymbol.includes('-') ? actualSymbol.replace('-', '/') : (actualSymbol.endsWith('USDT') ? actualSymbol.replace(/USDT$/, '/USDT') : actualSymbol);
 
-    // 📝 Paso 4: Alimentar a la IA con los datos históricos del gráfico
-    const chartContext = `--- CONTEXTO DEL GRÁFICO ACTUAL ---
-Símbolo: ${displaySymbolForAI}
-Temporalidad: ${timeframe.toUpperCase()}
-Precio Actual: ${latestChartInfo.price ? `$${latestChartInfo.price.toFixed(Math.abs(latestChartInfo.price) < 1 ? 4 : 2)}` : 'N/A'}
-Volumen Última Vela: ${latestChartInfo.volume ? latestChartInfo.volume.toLocaleString() : 'N/A'}
-Exchange: ${dataSource.toUpperCase()}
+    const chartContext = `--- CONTEXTO DEL GRÁFICO ACTUAL ---\nSímbolo: ${displaySymbolForAI}\nTemporalidad: ${timeframe.toUpperCase()}\nPrecio Actual: ${latestChartInfo.price ? `$${latestChartInfo.price.toFixed(Math.abs(latestChartInfo.price) < 1 ? 4 : 2)}` : 'N/A'}\nVolumen Última Vela: ${latestChartInfo.volume ? latestChartInfo.volume.toLocaleString() : 'N/A'}\nExchange: ${dataSource.toUpperCase()}\n\nEl usuario está viendo un gráfico de trading en tiempo real con las siguientes configuraciones:\n- Medias móviles activas: ${movingAverages.filter(ma => ma.visible).map(ma => `${ma.type}${ma.period}`).join(', ')}\n- Tema: ${theme}\n- Dibujos de análisis IA: ${showAiAnalysisDrawings ? 'Visibles' : 'Ocultos'}\n\nDATOS HISTÓRICOS DEL GRÁFICO (últimas ${historicalData.length} velas):\n${historicalData.length > 0 ? JSON.stringify(historicalData.slice(-50), null, 2) : 'No hay datos históricos disponibles aún'}\n--- FIN DEL CONTEXTO DEL GRÁFICO ---`;
 
-El usuario está viendo un gráfico de trading en tiempo real con las siguientes configuraciones:
-- Medias móviles activas: ${movingAverages.filter(ma => ma.visible).map(ma => `${ma.type}${ma.period}`).join(', ')}
-- Tema: ${theme}
-- Dibujos de análisis IA: ${showAiAnalysisDrawings ? 'Visibles' : 'Ocultos'}
-
-DATOS HISTÓRICOS DEL GRÁFICO (últimas ${historicalData.length} velas):
-${historicalData.length > 0 ? JSON.stringify(historicalData.slice(-50), null, 2) : 'No hay datos históricos disponibles aún'}
---- FIN DEL CONTEXTO DEL GRÁFICO ---
-`;
-
-    // 🔥 MEJORA: Siempre incluir análisis previo disponible, incluso si es de otra temporalidad
     if (analysisResult && analysisResult.analisis_general?.simbolo === displaySymbolForAI) {
       const isMatchingTimeframe = analysisResult.analisis_general?.temporalidad_principal_analisis === timeframe.toUpperCase();
-
       let timeframeNote = "";
       if (!isMatchingTimeframe) {
-        timeframeNote = `
-
-⚠️ NOTA IMPORTANTE PARA LA IA: El análisis técnico disponible fue generado para la temporalidad ${analysisResult.analisis_general?.temporalidad_principal_analisis || 'N/A'}, pero el usuario está viendo actualmente el gráfico en ${timeframe.toUpperCase()}. Considera esta diferencia en tu respuesta. El análisis sigue siendo válido como contexto, pero puedes mencionar que algunas observaciones podrían ser más relevantes en la temporalidad original del análisis.`;
+        timeframeNote = `\n\n⚠️ NOTA IMPORTANTE PARA LA IA: El análisis técnico disponible fue generado para la temporalidad ${analysisResult.analisis_general?.temporalidad_principal_analisis || 'N/A'}, pero el usuario está viendo actualmente el gráfico en ${timeframe.toUpperCase()}. Considera esta diferencia en tu respuesta. El análisis sigue siendo válido como contexto, pero puedes mencionar que algunas observaciones podrían ser más relevantes en la temporalidad original del análisis.`;
       }
-
-      const analysisContext = `--- INICIO DEL CONTEXTO DE ANÁLISIS ---
-${chartContext}
-
-ANÁLISIS TÉCNICO PREVIO DISPONIBLE:
-${JSON.stringify(analysisResult, null, 2)}${timeframeNote}
---- FIN DEL CONTEXTO DE ANÁLISIS ---
-
-Pregunta del usuario: ${messageText.trim()}`;
-      userTextForAI = analysisContext;
+      userTextForAI = `--- INICIO DEL CONTEXTO DE ANÁLISIS ---\n${chartContext}\n\nANÁLISIS TÉCNICO PREVIO DISPONIBLE:\n${JSON.stringify(analysisResult, null, 2)}${timeframeNote}\n--- FIN DEL CONTEXTO DE ANÁLISIS ---\n\nPregunta del usuario: ${messageText.trim()}`;
     } else {
-      // If no analysis available for this symbol, still provide chart context
-      userTextForAI = `${chartContext}
-
-Pregunta del usuario: ${messageText.trim()}`;
+      userTextForAI = `${chartContext}\n\nPregunta del usuario: ${messageText.trim()}`;
     }
-
 
     const userMessage: ChatMessage = {
       id: generateUUID(),
@@ -420,12 +380,10 @@ Pregunta del usuario: ${messageText.trim()}`;
   const handleClearChatHistory = () => {
     setChatMessages([]);
     setChatError(null);
-    // Re-initialize chat session to clear AI's context as well
     if (apiKeyPresent) {
       initializeChatSession();
     }
   };
-
 
   const handleDataSourceChange = (newDataSource: DataSource) => {
     setDataSource(newDataSource);
@@ -445,12 +403,9 @@ Pregunta del usuario: ${messageText.trim()}`;
   const toggleTimeframeFavorite = (timeframe: string) => {
     setFavoriteTimeframes(prev => {
       if (prev.includes(timeframe)) {
-        // Remove from favorites
         return prev.filter(tf => tf !== timeframe);
       } else {
-        // Add to favorites (limit to 8 for UI space)
         if (prev.length >= 8) {
-          // Replace the last one
           return [...prev.slice(0, 7), timeframe];
         }
         return [...prev, timeframe];
@@ -462,7 +417,6 @@ Pregunta del usuario: ${messageText.trim()}`;
     setFavoriteTimeframes([...DEFAULT_FAVORITE_TIMEFRAMES]);
   };
 
-  // 🆕 Funciones para el Sistema de Plantillas
   const getCurrentConfiguration = useCallback((): TemplateConfiguration => {
     return {
       movingAverages,
@@ -485,14 +439,12 @@ Pregunta del usuario: ${messageText.trim()}`;
   ]);
 
   const handleSaveTemplate = useCallback((template: Omit<ChartTemplate, 'id' | 'createdAt' | 'lastModified'>) => {
-    const templateId = templateManager.saveTemplate(template);
-    console.log('Template saved with ID:', templateId);
+    templateManager.saveTemplate(template);
   }, [templateManager]);
 
   const handleLoadTemplate = useCallback((templateId: string) => {
     const config = templateManager.loadTemplate(templateId);
     if (config) {
-      // Aplicar toda la configuración cargada
       setMovingAverages(config.movingAverages);
       setTheme(config.theme);
       setChartPaneBackgroundColor(config.chartPaneBackgroundColor);
@@ -502,40 +454,24 @@ Pregunta del usuario: ${messageText.trim()}`;
       setShowWSignals(config.showWSignals);
       setShowAiAnalysisDrawings(config.showAiAnalysisDrawings);
       setFavoriteTimeframes(config.favoriteTimeframes);
-
-      // Configuración opcional por defecto
-      if (config.defaultDataSource) {
-        setDataSource(config.defaultDataSource);
-      }
+      if (config.defaultDataSource) setDataSource(config.defaultDataSource);
       if (config.defaultSymbol) {
         const consistentSymbol = getConsistentSymbolForDataSource(config.defaultSymbol, config.defaultDataSource || dataSource);
         setActualSymbol(consistentSymbol);
         setSymbolInput(consistentSymbol);
       }
-      if (config.defaultTimeframe) {
-        setTimeframe(config.defaultTimeframe);
-      }
-
-      console.log('Template loaded and applied');
+      if (config.defaultTimeframe) setTimeframe(config.defaultTimeframe);
     }
   }, [templateManager, dataSource]);
 
   const handleDeleteTemplate = useCallback((templateId: string) => {
     templateManager.deleteTemplate(templateId);
-    console.log('Template deleted:', templateId);
   }, [templateManager]);
 
   const handleSetAsDefault = useCallback((templateId: string) => {
     templateManager.setAsDefault(templateId);
-    console.log('Template set as default:', templateId);
   }, [templateManager]);
 
-  // Crear plantilla por defecto si es necesario
-  useEffect(() => {
-    templateManager.createDefaultTemplateIfNeeded(getCurrentConfiguration());
-  }, [templateManager, getCurrentConfiguration]);
-
-  // Actualizar plantilla activa cuando cambie la configuración
   useEffect(() => {
     if (templateManager.activeTemplateId) {
       templateManager.updateActiveTemplate(getCurrentConfiguration());
@@ -544,319 +480,69 @@ Pregunta del usuario: ${messageText.trim()}`;
 
   return (
     <div className={`flex flex-col h-screen antialiased ${theme === 'dark' ? 'bg-slate-900 text-slate-100' : 'bg-gray-100 text-gray-900'}`}>
-      <header className={`p-2 sm:p-3 shadow-md flex justify-between items-center ${theme === 'dark' ? 'bg-slate-800' : 'bg-white border-b border-gray-200'}`}>
-        <div className="flex items-center gap-2 sm:gap-4">
-          <div className="flex items-center gap-2">
-            {/* Logo */}
-            <img src="/logo.png" alt="TradingRoad Logo" className="w-6 h-6" />
-            <h1 className={`text-lg sm:text-xl font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>TradingRoad</h1>
+
+      <header className={`p-2 sm:p-3 shadow-md ${theme === 'dark' ? 'bg-slate-800' : 'bg-white border-b border-gray-200'}`}>
+
+        <div className="lg:hidden">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="TradingRoad Logo" className="w-6 h-6" />
+              <h1 className={`text-base sm:text-lg font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>TradingRoad</h1>
+            </div>
+            <div className="flex items-center gap-1">
+              <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} title="Seleccionar Temporalidad" className={`text-xs px-2 py-1 h-8 rounded-lg border-0 focus:ring-2 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}><optgroup label="Favoritos">{favoriteTimeframes.map(tf => (<option key={`fav-opt-${tf}`} value={tf}>{tf.toUpperCase()}</option>))}</optgroup><optgroup label="General">{QUICK_SELECT_TIMEFRAMES.filter(tf => !favoriteTimeframes.includes(tf)).map(tf => (<option key={tf} value={tf}>{tf.toUpperCase()}</option>))}</optgroup></select>
+              <button onClick={() => toggleTimeframeFavorite(timeframe)} title="Añadir/Quitar Favorito" className={`text-xs p-2 h-8 rounded ${favoriteTimeframes.includes(timeframe) ? 'bg-yellow-500 text-white' : (theme === 'dark' ? 'bg-slate-600' : 'bg-gray-200')}`}>{favoriteTimeframes.includes(timeframe) ? '★' : '☆'}</button>
+              <button onClick={() => setAnalysisPanelMode(analysisPanelMode === 'initial' ? (analysisResult ? 'analysis' : 'chat') : 'initial')} title="Mostrar/Ocultar Panel" className={`p-2 h-8 w-8 flex items-center justify-center rounded transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d={analysisPanelMode === 'initial' ? "M9 5v14l11-7z" : "M15 19l-7-7 7-7v14z"} /></svg></button>
+              <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Cambiar Tema" className={`p-2 h-8 w-8 flex items-center justify-center rounded ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}>{theme === 'light' ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>}</button>
+            </div>
           </div>
-
-          {/* Controles discretos del mercado */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Exchange selector */}
-            <select
-              value={dataSource}
-              onChange={(e) => handleDataSourceChange(e.target.value as DataSource)}
-              className={`text-xs px-2 py-1 rounded border-0 focus:ring-1 focus:ring-sky-500 ${theme === 'dark' ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}
-            >
-              {AVAILABLE_DATA_SOURCES.map(ds => <option key={ds.value} value={ds.value}>{ds.label}</option>)}
-            </select>
-
-            {/* Symbol selector with dropdown and manual input */}
-            <div className="flex items-center gap-1">
-              <select
-                value={symbolInput}
-                onChange={(e) => handleSymbolInputChange(e.target.value)}
-                className={`text-xs px-2 py-1 w-20 sm:w-24 rounded border-0 focus:ring-1 focus:ring-sky-500 ${theme === 'dark' ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}
-              >
-                {(dataSource === 'bingx' ? AVAILABLE_SYMBOLS_BINGX : AVAILABLE_SYMBOLS_BINANCE).map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-
-              {/* Manual input for custom symbols */}
-              <input
-                type="text"
-                value={symbolInput}
-                onChange={(e) => handleSymbolInputChange(e.target.value)}
-                placeholder="Escribir..."
-                className={`text-xs px-2 py-1 w-16 sm:w-20 rounded border-0 focus:ring-1 focus:ring-sky-500 ${theme === 'dark' ? 'bg-slate-700 text-slate-200' : 'bg-gray-100 text-gray-700'}`}
-              />
-            </div>
-
-            {/* Timeframes with Smart Favorites System */}
-            <div className="flex items-center gap-1">
-              {/* Favorite timeframes - showing all favorites ordered */}
-              {favoriteTimeframes
-                .sort((a, b) => {
-                  // Order by typical trading hierarchy: m -> h -> d -> w
-                  const order = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
-                  return order.indexOf(a) - order.indexOf(b);
-                })
-                .map(tf => (
-                  <div key={tf} className="relative group">
-                    <button
-                      onClick={() => setTimeframe(tf)}
-                      onDoubleClick={() => toggleTimeframeFavorite(tf)}
-                      title={`${tf.toUpperCase()} - Doble click para quitar de favoritos`}
-                      className={`relative text-xs px-2.5 py-1.5 rounded-lg transition-all duration-200 border ${timeframe === tf
-                        ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg shadow-sky-500/30 scale-105 border-sky-400'
-                        : theme === 'dark'
-                          ? 'bg-slate-700 hover:bg-slate-600 text-slate-200 hover:scale-105 border-slate-600 hover:border-slate-500'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-700 hover:scale-105 border-gray-200 hover:border-gray-300'
-                        } ${favoriteTimeframes.length > 6 ? 'px-1.5 py-1' : 'px-2.5 py-1.5'}`}
-                    >
-                      <span className="font-medium">{tf.toUpperCase()}</span>
-                    </button>
-                  </div>
-                ))}
-
-              {/* Dropdown for managing timeframes */}
-              <div className="relative group">
-                <select
-                  value={timeframe}
-                  onChange={(e) => {
-                    if (e.target.value === 'RESET_FAVORITES') {
-                      resetToDefaultFavorites();
-                      return;
-                    }
-                    setTimeframe(e.target.value);
-                  }}
-                  title="Gestionar temporalidades"
-                  className={`text-xs px-2 py-1.5 rounded-lg border-0 focus:ring-2 focus:ring-sky-500 transition-all ${theme === 'dark'
-                    ? 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                >
-                  <optgroup label="📌 Favoritos">
-                    {favoriteTimeframes
-                      .sort((a, b) => {
-                        const order = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
-                        return order.indexOf(a) - order.indexOf(b);
-                      })
-                      .map(tf => (
-                        <option key={`fav-${tf}`} value={tf}>{tf.toUpperCase()}</option>
-                      ))}
-                  </optgroup>
-                  <optgroup label="➕ Añadir más">
-                    {QUICK_SELECT_TIMEFRAMES
-                      .filter(tf => !favoriteTimeframes.includes(tf))
-                      .map(tf => (
-                        <option key={tf} value={tf}>{tf.toUpperCase()}</option>
-                      ))}
-                  </optgroup>
-                  <optgroup label="⚙️ Gestión">
-                    <option value="RESET_FAVORITES">🔄 Restaurar por defecto</option>
-                  </optgroup>
-                </select>
-
-                {/* Enhanced Add/Remove favorite button with star icon */}
-                <button
-                  onClick={() => toggleTimeframeFavorite(timeframe)}
-                  title={`${favoriteTimeframes.includes(timeframe) ? 'Quitar de favoritos' : 'Añadir a favoritos'} (${favoriteTimeframes.length}/8 favoritos)`}
-                  className={`ml-1 text-xs px-2 py-1.5 rounded-lg transition-all duration-200 relative ${favoriteTimeframes.includes(timeframe)
-                    ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 shadow-md'
-                    : theme === 'dark'
-                      ? 'bg-slate-600 text-slate-300 hover:bg-yellow-500 hover:text-white border border-slate-500 hover:border-yellow-500'
-                      : 'bg-gray-200 text-gray-600 hover:bg-yellow-500 hover:text-white border border-gray-300 hover:border-yellow-500'
-                    }`}
-                >
-                  {favoriteTimeframes.includes(timeframe) ? '★' : '☆'}
-                </button>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <select value={dataSource} onChange={(e) => handleDataSourceChange(e.target.value as DataSource)} className={`text-xs px-2 py-1.5 h-8 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{AVAILABLE_DATA_SOURCES.map(ds => <option key={ds.value} value={ds.value}>{ds.label}</option>)}</select>
+            <select value={symbolInput} onChange={(e) => handleSymbolInputChange(e.target.value)} className={`text-xs px-2 py-1.5 h-8 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{(dataSource === 'bingx' ? AVAILABLE_SYMBOLS_BINGX : AVAILABLE_SYMBOLS_BINANCE).map(s => (<option key={s} value={s}>{s}</option>))}</select>
+          </div>
+          <div className="flex items-center gap-2 justify-end px-2 mb-3">
+            <button onClick={(e) => handleRequestAnalysis(e.shiftKey)} disabled={analysisLoading || isChartLoading || !apiKeyPresent} className={`flex items-center justify-center px-2 py-1.5 h-8 rounded text-base font-medium transition-colors ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-700 text-gray-400'}`}>⚡</button>
+            <button onClick={handleShowChat} disabled={chatLoading || !apiKeyPresent} className={`flex items-center justify-center px-2 py-1.5 h-8 rounded text-base font-medium transition-colors ${apiKeyPresent && !chatLoading ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-700 text-gray-400'}`}>🤖</button>
+            <button onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)} title="Señales" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded ${showAiAnalysisDrawings ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg></button>
+            <button onClick={() => setShowLTFFibonacci(!showLTFFibonacci)} title="Fibonacci LTF" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded ${showLTFFibonacci ? 'bg-teal-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l-4 4m8-8v13l4-4" /></svg></button>
+            <button onClick={() => setDisplaySettingsDialogOpen(true)} title="Indicadores" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded transition-colors ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" /><path d="M7 12l3-3 4 4 5-5" /></svg></button>
+            <button onClick={() => setShowTemplateManager(true)} title="Plantillas" className={`p-1.5 h-8 w-8 flex items-center justify-center rounded ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" /><path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" /><path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg></button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* 1. Análisis IA - Nuevo diseño con iconos y estado */}
-          <button
-            onClick={(e) => handleRequestAnalysis(e.shiftKey)}
-            disabled={analysisLoading || isChartLoading || !apiKeyPresent}
-            title={`Análisis IA${apiKeyPresent ? ' (Shift+Click para regenerar)' : ''}`}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${apiKeyPresent && !analysisLoading && !isChartLoading
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-blue-500/25'
-              : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-              }`}
-          >
-            <div className="w-4 h-4 flex items-center justify-center relative">
-              {analysisLoading ? (
-                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 3v18h18M7 12l3-3 4 4 5-5" />
-                  <path d="M21 7v4h-4" />
-                </svg>
-              )}
+        <div className="hidden lg:flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="TradingRoad Logo" className="w-6 h-6" />
+              <h1 className={`text-xl font-bold ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>TradingRoad</h1>
             </div>
-            <span className="text-xs font-medium">
-              {analysisLoading ? 'Analizando...' : 'Análisis IA'}
-            </span>
-            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${apiKeyPresent ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-red-400'}`}></div>
-          </button>
-
-          {/* 2. TradeGuru IA - Nuevo diseño */}
-          <button
-            onClick={handleShowChat}
-            disabled={chatLoading || !apiKeyPresent}
-            title="TradeGuru IA"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${apiKeyPresent && !chatLoading
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
-              : 'bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'
-              }`}
-          >
-            <div className="w-4 h-4 flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c3.31 0 6 2.69 6 6v8h-2v-2H8v2H6v-8c0-3.31 2.69-6 6-6zm-3 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm6 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" />
-              </svg>
+            <select value={dataSource} onChange={(e) => handleDataSourceChange(e.target.value as DataSource)} className={`text-xs px-2 py-1 h-8 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{AVAILABLE_DATA_SOURCES.map(ds => <option key={ds.value} value={ds.value}>{ds.label}</option>)}</select>
+            <div className="flex items-center gap-1">
+              <select value={symbolInput} onChange={(e) => handleSymbolInputChange(e.target.value)} className={`text-xs px-2 py-1 h-8 w-24 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}>{(dataSource === 'bingx' ? AVAILABLE_SYMBOLS_BINGX : AVAILABLE_SYMBOLS_BINANCE).map(s => (<option key={s} value={s}>{s}</option>))}</select>
+              <input type="text" value={symbolInput} onChange={(e) => handleSymbolInputChange(e.target.value)} placeholder="Otro..." className={`text-xs px-2 py-1 h-8 w-16 rounded border-0 focus:ring-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`} />
             </div>
-            <span className="text-xs font-medium">Chat IA</span>
-            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${apiKeyPresent ? 'bg-green-400 shadow-lg shadow-green-400/50 animate-pulse' : 'bg-red-400'}`}></div>
-          </button>
-
-          {/* 3. Señales - Nuevo diseño */}
-          <button
-            onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)}
-            title={showAiAnalysisDrawings ? 'Ocultar Señales' : 'Mostrar Señales'}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${showAiAnalysisDrawings
-              ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-orange-500/25'
-              : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-gray-500/25'
-              }`}
-          >
-            <div className="w-4 h-4 flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </svg>
+            <div className="flex items-center gap-1">
+              {favoriteTimeframes.map(tf => (<button key={tf} onClick={() => setTimeframe(tf)} onDoubleClick={() => toggleTimeframeFavorite(tf)} title={`${tf.toUpperCase()} - Doble click para quitar`} className={`h-8 text-xs px-2.5 py-1.5 rounded-lg transition-all duration-200 border ${timeframe === tf ? 'bg-gradient-to-r from-sky-500 to-blue-500 text-white shadow-lg' : theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-gray-200 hover:bg-gray-300'}`}><span className="font-medium">{tf.toUpperCase()}</span></button>))}
+              <select value={timeframe} onChange={(e) => { if (e.target.value === 'RESET_FAVORITES') { resetToDefaultFavorites(); return; } setTimeframe(e.target.value); }} title="Seleccionar Temporalidad" className={`text-xs px-2 py-1 h-8 rounded-lg border-0 focus:ring-2 ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-100'}`}><optgroup label="Favoritos">{favoriteTimeframes.map(tf => (<option key={`fav-opt-${tf}`} value={tf}>{tf.toUpperCase()}</option>))}</optgroup><optgroup label="General">{QUICK_SELECT_TIMEFRAMES.filter(tf => !favoriteTimeframes.includes(tf)).map(tf => (<option key={tf} value={tf}>{tf.toUpperCase()}</option>))}</optgroup><optgroup label="⚙️ Gestión"><option value="RESET_FAVORITES">🔄 Restaurar</option></optgroup></select>
+              <button onClick={() => toggleTimeframeFavorite(timeframe)} title="Añadir/Quitar Favorito" className={`text-xs p-2 h-8 rounded ${favoriteTimeframes.includes(timeframe) ? 'bg-yellow-500 text-white' : (theme === 'dark' ? 'bg-slate-600' : 'bg-gray-200')}`}>{favoriteTimeframes.includes(timeframe) ? '★' : '☆'}</button>
             </div>
-            <span className="text-xs font-medium">Señales</span>
-            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${showAiAnalysisDrawings ? 'bg-white shadow-lg shadow-white/50' : 'bg-gray-400'}`}></div>
-          </button>
-
-          {/* 3.5. Fibonacci 1H - Toggle */}
-          <button
-            onClick={() => setShowLTFFibonacci(!showLTFFibonacci)}
-            title={showLTFFibonacci ? 'Ocultar Fibonacci 1H' : 'Mostrar Fibonacci 1H'}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all duration-300 shadow-md relative overflow-hidden ${showLTFFibonacci
-              ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white shadow-amber-500/25'
-              : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white shadow-gray-500/25'
-              }`}
-          >
-            <div className="w-4 h-4 flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12l6-6 6 6" />
-                <path d="M3 18l6-6 6 6" />
-              </svg>
-            </div>
-            <span className="text-xs font-medium">Fib 1H</span>
-            <div className={`w-1.5 h-1.5 rounded-full absolute top-0.5 right-0.5 ${showLTFFibonacci ? 'bg-white shadow-lg shadow-white/50' : 'bg-gray-400'}`}></div>
-          </button>
-
-          {/* 4. Indicadores - Solo símbolo */}
-          <button
-            onClick={() => setDisplaySettingsDialogOpen(true)}
-            title="Configuración e Indicadores"
-            className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 shadow-md ${theme === 'dark'
-              ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/25'
-              : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-indigo-500/25'
-              }`}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 3v18h18" />
-              <path d="M7 12l3-3 4 4 5-5" />
-            </svg>
-          </button>
-
-          {/* 4.5. Plantillas - Gestión de Configuraciones */}
-          <button
-            onClick={() => setShowTemplateManager(true)}
-            title={`Gestión de Plantillas${templateManager.activeTemplateId ? ` (Activa: ${templateManager.getActiveTemplate()?.name})` : ''}`}
-            className={`flex items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-300 shadow-md ${theme === 'dark'
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
-              : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/25'
-              }`}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" />
-              <path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" />
-              <path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" />
-            </svg>
-          </button>
-
-          {/* 5. Panel Toggle - Mostrar/Ocultar Panel */}
-          <button
-            onClick={() => setAnalysisPanelMode(analysisPanelMode === 'initial' ? (analysisResult ? 'analysis' : 'initial') : 'initial')}
-            title={analysisPanelMode === 'initial' ? 'Mostrar Panel IA' : 'Ocultar Panel IA'}
-            className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d={analysisPanelMode === 'initial' ? "M9 5v14l11-7z" : "M15 19l-7-7 7-7v14z"} />
-            </svg>
-          </button>
-
-          {/* 5.5. Zona Horaria Selector */}
-          <div className="relative">
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              title="Seleccionar zona horaria"
-              className={`text-xs px-2 py-1.5 rounded-lg border transition-colors appearance-none min-w-[60px] text-center ${theme === 'dark'
-                  ? 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
-                  : 'bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200'
-                }`}
-            >
-              <option value="UTC">UTC</option>
-              <option value="UTC+1">UTC+1</option>
-              <option value="UTC+2">UTC+2</option>
-              <option value="UTC+4">UTC+4</option>
-              <option value="UTC+8">UTC+8</option>
-              <option value="UTC-5">UTC-5</option>
-              <option value="UTC-8">UTC-8</option>
-            </select>
           </div>
-
-          {/* 6. Día y noche */}
-          <button
-            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-            title={`Cambiar a tema ${theme === 'light' ? 'oscuro' : 'claro'}`}
-            aria-label={`Cambiar a tema ${theme === 'light' ? 'oscuro' : 'claro'}`}
-            className={`p-1.5 sm:p-2 rounded text-xs transition-colors ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'}`}
-          >
-            {theme === 'light' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4 sm:w-5 sm:h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4 sm:w-5 sm:h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-              </svg>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={(e) => handleRequestAnalysis(e.shiftKey)} title="Análisis IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={analysisLoading || isChartLoading || !apiKeyPresent}><span className="text-lg">⚡</span><span className="hidden lg:inline">{analysisLoading ? 'Analizando...' : 'Análisis'}</span></button>
+            <button onClick={handleShowChat} title="Chat IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !chatLoading ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={chatLoading || !apiKeyPresent}><span className="text-lg">🤖</span><span className="hidden lg:inline">Chat</span></button>
+            <button onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)} title="Señales" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${showAiAnalysisDrawings ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg><span className="hidden xl:inline">Señales</span></button>
+            <button onClick={() => setShowLTFFibonacci(!showLTFFibonacci)} title="Fibonacci LTF" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${showLTFFibonacci ? 'bg-teal-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l-4 4m8-8v13l4-4" /></svg><span className="hidden xl:inline">Fib LTF</span></button>
+            <button onClick={() => setDisplaySettingsDialogOpen(true)} title="Indicadores" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18" /><path d="M7 12l3-3 4 4 5-5" /></svg></button>
+            <button onClick={() => setShowTemplateManager(true)} title="Plantillas" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2z" /><path d="M8 21v-4a2 2 0 012-2h4a2 2 0 012 2v4" /><path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3" /></svg></button>
+            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Tema" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}>{theme === 'light' ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>}</button>
+          </div>
         </div>
       </header>
 
       <ApiKeyMessage apiKeyPresent={apiKeyPresent} />
 
       <main className="flex-grow flex flex-col md:flex-row p-2 sm:p-4 gap-2 sm:gap-4 overflow-y-auto">
-        <div className={`w-full flex-1 flex flex-col gap-2 sm:gap-4 overflow-hidden order-1 ${analysisPanelMode !== 'initial' ? 'md:order-2' : 'md:order-1'}`}>
-          <div className={`flex-grow min-h-[300px] sm:min-h-[400px] md:min-h-0 shadow-lg rounded-lg overflow-hidden ${theme === 'dark' ? 'bg-slate-800' : 'bg-white'}`}>
-            <RealTimeTradingChart
-              dataSource={dataSource} symbol={actualSymbol} timeframe={timeframe}
-              analysisResult={analysisResult} onLatestChartInfoUpdate={handleLatestChartInfoUpdate}
-              onChartLoadingStateChange={handleChartLoadingStateChange} movingAverages={movingAverages}
-              theme={theme} chartPaneBackgroundColor={chartPaneBackgroundColor}
-              volumePaneHeight={volumePaneHeight} showAiAnalysisDrawings={showAiAnalysisDrawings}
-              wSignalColor={wSignalColor} wSignalOpacity={wSignalOpacity / 100}
-              showWSignals={showWSignals} showLTFFibonacci={showLTFFibonacci}
-              timezone={timezone} onHistoricalDataUpdate={handleHistoricalDataUpdate}
-            />
-          </div>
-        </div>
-        <div
-          id="controls-analysis-panel"
-          className={`w-full md:w-80 lg:w-[360px] xl:w-[400px] flex-none flex flex-col gap-2 sm:gap-4 overflow-y-auto order-2 md:order-1 ${analysisPanelMode === 'initial' ? 'hidden' : ''
-            }`}
-        >
+        <div id="controls-analysis-panel" className={`w-full md:w-80 lg:w-[360px] xl:w-[400px] flex-none flex-col gap-2 sm:gap-4 overflow-y-auto order-1 md:order-1 ${analysisPanelMode === 'initial' ? 'hidden md:flex' : 'flex'}`}>
           <div className={`${theme === 'dark' ? 'bg-slate-800' : 'bg-white'} rounded-lg shadow-md flex-grow flex flex-col`}>
             <AnalysisPanel
               panelMode={analysisPanelMode}
@@ -872,6 +558,22 @@ Pregunta del usuario: ${messageText.trim()}`;
               apiKeyPresent={apiKeyPresent}
               showLTFFibonacci={showLTFFibonacci}
               onShowLTFFibonacciChange={setShowLTFFibonacci}
+            />
+          </div>
+        </div>
+
+        <div className="w-full flex-1 flex flex-col gap-2 sm:gap-4 overflow-hidden order-2 md:order-2">
+          <div className={`flex-grow min-h-[400px] md:min-h-0 shadow-lg rounded-lg overflow-hidden ${theme === 'dark' ? 'bg-slate-800' : 'bg-white'}`}>
+            <RealTimeTradingChart
+              dataSource={dataSource} symbol={actualSymbol} timeframe={timeframe}
+              analysisResult={analysisResult} onLatestChartInfoUpdate={handleLatestChartInfoUpdate}
+              onChartLoadingStateChange={handleChartLoadingStateChange} movingAverages={movingAverages}
+              theme={theme} chartPaneBackgroundColor={chartPaneBackgroundColor}
+              volumePaneHeight={volumePaneHeight} showAiAnalysisDrawings={showAiAnalysisDrawings}
+              wSignalColor={wSignalColor} wSignalOpacity={wSignalOpacity / 100}
+              showWSignals={showWSignals}
+              showLTFFibonacci={showLTFFibonacci}
+              onHistoricalDataUpdate={handleHistoricalDataUpdate}
             />
           </div>
         </div>
@@ -898,7 +600,6 @@ Pregunta del usuario: ${messageText.trim()}`;
         />
       )}
 
-      {/* 🆕 Gestor de Plantillas */}
       <TemplateManager
         templates={templateManager.templates}
         activeTemplateId={templateManager.activeTemplateId}

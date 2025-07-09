@@ -20,7 +20,7 @@ interface AnalysisPanelProps {
 }
 
 const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }: { children: React.ReactNode }) => (
-  <h3 className="text-md sm:text-lg font-semibold mt-3 sm:mt-4 mb-1.5 sm:mb-2 text-sky-400 border-b border-slate-700 pb-1">{children}</h3>
+  <h3 className="text-sm sm:text-base md:text-lg font-semibold mt-2 sm:mt-3 md:mt-4 mb-1 sm:mb-1.5 md:mb-2 text-sky-400 border-b border-slate-700 pb-1">{children}</h3>
 );
 
 const DetailItem: React.FC<{ label: string; value?: string | number | null; isCode?: boolean; valueClassName?: string }> = ({
@@ -405,7 +405,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
     return (
       <div className="p-3 sm:p-4">
-        <h2 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3 text-sky-400">Resultados del Análisis IA</h2>
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2 sm:mb-3 text-sky-400">Resultados del Análisis IA</h2>
 
         {/* NUEVO: Resumen de Oportunidades por Estilo */}
         {(() => {
@@ -422,17 +422,17 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             return (
               <>
                 <SectionTitle>🎯 Oportunidades Detectadas</SectionTitle>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                <div className="grid grid-cols-1 gap-2 mb-3 sm:mb-4">
                   {opportunities.map((opp, idx) => (
-                    <div key={idx} className={`p-2 rounded-lg border text-xs ${opp.style === 'scalping' ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400' :
+                    <div key={idx} className={`p-2 sm:p-3 rounded-lg border text-xs sm:text-sm ${opp.style === 'scalping' ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400' :
                       opp.style === 'intradia' ? 'bg-cyan-400/10 border-cyan-400/30 text-cyan-400' :
                         opp.style === 'swing' ? 'bg-purple-400/10 border-purple-400/30 text-purple-400' :
                           opp.style === 'largo_plazo' ? 'bg-orange-400/10 border-orange-400/30 text-orange-400' :
                             'bg-slate-600/10 border-slate-400/30 text-slate-300'
                       }`}>
-                      <div className="flex items-center gap-1.5 mb-1">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                         <span className="text-sm">{styleIcons[opp.style] || styleIcons.sin_clasificar}</span>
-                        <span className="font-bold">{(opp.style || 'sin_clasificar').toUpperCase()}</span>
+                        <span className="font-bold text-xs">{(opp.style || 'sin_clasificar').toUpperCase()}</span>
                         <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${opp.type === 'largo' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                           }`}>
                           {(opp.type || 'ninguno').toUpperCase()}
@@ -453,7 +453,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <SectionTitle>Escenario Principal</SectionTitle>
             <div className="p-2 sm:p-3 bg-slate-700 rounded-md">
               <p className="text-xs sm:text-sm font-semibold text-slate-100">{primaryScenario.nombre_escenario}</p>
-              <p className="text-xs text-slate-300 mt-1">{primaryScenario.descripcion_detallada}</p>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">{primaryScenario.descripcion_detallada}</p>
               {primaryScenario.niveles_clave_de_invalidacion && (
                 <p className="text-xs text-slate-400 mt-1">Invalidación: {primaryScenario.niveles_clave_de_invalidacion}</p>
               )}
@@ -603,7 +603,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-white">TradeGuru IA</h2>
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-white">TradeGuru IA</h2>
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${apiKeyPresent ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
                 <span className="text-xs text-white/90">{apiKeyPresent ? 'Online' : 'Offline'}</span>
@@ -707,7 +707,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         )}
 
         {/* Sección de input y status */}
-        <div className={`p-3 sm:p-4 border-t ${inputBorderColor} flex-shrink-0`}>
+        <div className={`p-2 sm:p-3 md:p-4 border-t ${inputBorderColor} flex-shrink-0`}>
           <div className="flex items-start space-x-2">
             <textarea
               ref={chatInputRef}
@@ -728,10 +728,15 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <button
               onClick={handleChatSend}
               disabled={chatLoading || !chatInputValue.trim() || !apiKeyPresent || (!!chatError && chatMessages.length === 0)}
-              className={`px-3 py-2 sm:px-4 sm:py-2.5 text-white font-semibold rounded-md shadow-sm text-xs sm:text-sm ${buttonBgColor} disabled:bg-slate-500 disabled:cursor-not-allowed`}
+              className={`px-2 py-2 sm:px-3 sm:py-2.5 text-white font-semibold rounded-md shadow-sm text-xs sm:text-sm ${buttonBgColor} disabled:bg-slate-500 disabled:cursor-not-allowed`}
               aria-label="Enviar mensaje"
             >
-              Enviar
+              <span className="hidden sm:inline">Enviar</span>
+              <span className="sm:hidden">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                </svg>
+              </span>
             </button>
           </div>
 

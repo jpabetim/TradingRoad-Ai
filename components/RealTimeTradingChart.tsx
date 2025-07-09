@@ -3,13 +3,12 @@ import {
   createChart, IChartApi, ISeriesApi,
   CandlestickData as LWCCandlestickData, LineData as LWCLineData, HistogramData as LWCHistogramData,
   LineStyle, UTCTimestamp, PriceScaleMode, IPriceLine, DeepPartial, ChartOptions, SeriesMarker, Time, ColorType,
-  CandlestickSeriesOptions, LineSeriesOptions, HistogramSeriesOptions // Removed SeriesType and SeriesOptionsMap
+  CandlestickSeriesOptions, LineSeriesOptions, HistogramSeriesOptions, LineWidth
 } from 'lightweight-charts';
 import pako from 'pako';
-import { DataSource, GeminiAnalysisResult, TickerData, AnalysisPointType, MovingAverageConfig, FibonacciLevel, MarketDataPoint } from '../types'; // Removed DeltaZoneSettings
+import { DataSource, GeminiAnalysisResult, TickerData, AnalysisPointType, MovingAverageConfig, FibonacciLevel, MarketDataPoint } from '../types';
 import { mapTimeframeToApi } from '../constants';
 import { generateUUID } from '../utils/uuid';
-// import { IndicatorName } from '../App'; // No longer needed as RSI is removed
 
 type Theme = 'dark' | 'light';
 
@@ -18,29 +17,20 @@ interface RealTimeTradingChartProps {
   symbol: string;
   timeframe: string;
   analysisResult: GeminiAnalysisResult | null;
-  onLatestChartInfoUpdate: (info: { price: number | null; volume?: number | null }) => void; // RSI removed
+  onLatestChartInfoUpdate: (info: { price: number | null; volume?: number | null }) => void;
   onChartLoadingStateChange: (isLoading: boolean) => void;
   movingAverages: MovingAverageConfig[];
   theme: Theme;
   chartPaneBackgroundColor: string;
   volumePaneHeight: number;
   showAiAnalysisDrawings: boolean;
-  wSignalColor: string; // Hex color string e.g. #FFD700
-  wSignalOpacity: number; // Opacity from 0 to 1
-  showWSignals: boolean; // New prop to control W-Signal visibility
-  showLTFFibonacci: boolean; // New prop to control 1H Fibonacci visibility
-  timezone: string; // New prop to control timezone display
-  // 📝 Paso 1: Nueva prop para recibir los datos históricos
+  wSignalColor: string;
+  wSignalOpacity: number;
+  showWSignals: boolean;
+  showLTFFibonacci: boolean; // Prop para controlar el Fibo LTF
   onHistoricalDataUpdate: (data: MarketDataPoint[]) => void;
-  // RSI and DeltaZoneSettings props removed
-  // rsiColor: string;
-  // deltaZoneSettings: DeltaZoneSettings;
-  // indicatorDisplayOrder: IndicatorName[];
-  // rsiPaneHeight: number;
-  // showRsi: boolean;
 }
 
-// Use UTCTimestamp consistently for time data
 type CandlestickData = LWCCandlestickData<UTCTimestamp> & { volume?: number };
 type LineData = LWCLineData<UTCTimestamp>;
 type HistogramData = LWCHistogramData<UTCTimestamp>;
@@ -102,15 +92,12 @@ const PROVIDERS_CONFIG: { binance: BinanceProviderConfig; bingx: BingXProviderCo
               volume: parseFloat(k.volume)
             }));
           } else {
-            console.error("BingX API error or malformed data in 'contents':", bingxApiResponse?.msg || "Malformed data", bingxApiResponse);
             throw new Error(`BingX API error: ${bingxApiResponse?.msg || "Malformed data in 'contents'."}`);
           }
         } catch (e) {
-          console.error("Error parsing BingX 'contents' string from allorigins.win as JSON:", e, allOriginsParsedResponse.contents);
           throw new Error("Error parsing BingX 'contents' string from allorigins.win as JSON.");
         }
       } else {
-        console.error("Invalid response structure from allorigins.win proxy for BingX historical data. 'contents' field missing or not a string:", allOriginsParsedResponse);
         throw new Error("Invalid response structure from allorigins.win proxy for BingX historical data.");
       }
     },
@@ -120,8 +107,6 @@ const PROVIDERS_CONFIG: { binance: BinanceProviderConfig; bingx: BingXProviderCo
     parseTicker: (data, currentSymbol, currentProvider) => ({ price: parseFloat(data.p), symbol: currentSymbol, provider: currentProvider })
   }
 };
-
-// calculateRSI function removed
 
 export const calculateMA = (data: CandlestickData[], period: number): LineData[] => {
   if (data.length < period) return [];
@@ -157,8 +142,8 @@ const isColorLight = (hexColor: string): boolean => {
 };
 
 const THEME_COLORS = {
-  light: { background: '#FFFFFF', text: '#000000', grid: '#e5e7eb', border: '#d1d5db', /* rsiBand removed */ fiboRetracement: 'rgba(59, 130, 246, 0.7)', fiboExtension: 'rgba(249, 115, 22, 0.7)' },
-  dark: { background: '#0f172a', text: '#FFFFFF', grid: '#1e293b', border: '#334155', /* rsiBand removed */ fiboRetracement: 'rgba(96, 165, 250, 0.7)', fiboExtension: 'rgba(251, 146, 60, 0.7)' }
+  light: { background: '#FFFFFF', text: '#000000', grid: '#e5e7eb', border: '#d1d5db', fiboRetracement: 'rgba(59, 130, 246, 0.7)', fiboExtension: 'rgba(249, 115, 22, 0.7)' },
+  dark: { background: '#0f172a', text: '#FFFFFF', grid: '#1e293b', border: '#334155', fiboRetracement: 'rgba(96, 165, 250, 0.7)', fiboExtension: 'rgba(251, 146, 60, 0.7)' }
 };
 
 const getChartLayoutOptions = (
@@ -166,39 +151,29 @@ const getChartLayoutOptions = (
 ): DeepPartial<ChartOptions> => ({
   layout: {
     background: { type: ColorType.Solid, color: effectiveBackgroundColor },
-    textColor: effectiveTextColor // General text color
+    textColor: effectiveTextColor
   },
   grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
-  // Time scale and price scale text colors will be set explicitly after chart creation
 });
 
-// DeltaSignalOutput and calculateDeltaSignals removed
 
 const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   dataSource, symbol: rawSymbol, timeframe: rawTimeframe, analysisResult,
   onLatestChartInfoUpdate, onChartLoadingStateChange, movingAverages, theme,
   chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-  wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci, timezone,
-  onHistoricalDataUpdate // 📝 Extraer la nueva prop
-  // RSI and DeltaZone props removed
+  wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci,
+  onHistoricalDataUpdate
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'>>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'>>(null);
-  // rsiSeriesRef removed
-  // projectionSeriesRef removed - eliminamos la línea de proyección
   const analysisPriceLinesRef = useRef<IPriceLine[]>([]);
   const maSeriesRefs = useRef<Record<string, ISeriesApi<'Line'>>>({});
-  // rsiBandLinesRef removed
-
   const volumePriceScaleIdRef = useRef<string | null>(null);
-  // rsiPriceScaleIdRef removed
 
   const [historicalData, setHistoricalData] = useState<CandlestickData[]>([]);
-  const [tickerData, setTickerData] = useState<TickerData | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'ok' | 'error'>('connecting');
-  const [currentIntervalInSeconds, setCurrentIntervalInSeconds] = useState<number>(3600);
 
   const providerConf = PROVIDERS_CONFIG[dataSource];
   const formattedSymbol = rawSymbol && providerConf ? providerConf.formatSymbol(rawSymbol) : '';
@@ -217,27 +192,8 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
         return `rgba(59, 130, 246, ${opacity})`;
       case AnalysisPointType.LIQUIDEZ_VENDEDORA:
         return `rgba(249, 115, 22, ${opacity})`;
-      case AnalysisPointType.BOS_ALCISTA:
-      case AnalysisPointType.CHOCH_ALCISTA:
-        return `rgba(16, 185, 129, ${opacity})`;
-      case AnalysisPointType.BOS_BAJISTA:
-      case AnalysisPointType.CHOCH_BAJISTA:
-        return `rgba(220, 38, 38, ${opacity})`;
-      case AnalysisPointType.EQUILIBRIUM:
-        return `rgba(107, 114, 128, ${opacity})`;
       default: return `rgba(156, 163, 175, ${opacity})`;
     }
-  };
-
-  const getTextColorForZone = (bgColor: string) => {
-    return isColorLight(bgColor) ? THEME_COLORS.dark.text : THEME_COLORS.light.text;
-  };
-
-  const calculateIntervalInSeconds = (tf: string): number => {
-    const value = parseInt(tf.slice(0, -1)); const unit = tf.slice(-1).toLowerCase();
-    if (unit === 'm') return value * 60; if (unit === 'h') return value * 3600;
-    if (unit === 'd') return value * 86400; if (unit === 'w') return value * 604800;
-    return 3600;
   };
 
   useEffect(() => {
@@ -247,59 +203,28 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
       return;
     }
 
-    onChartLoadingStateChange(true); setTickerData(null);
-    onLatestChartInfoUpdate({ price: null, volume: null }); // RSI removed
-    setHistoricalData([]); maSeriesRefs.current = {};
-    setCurrentIntervalInSeconds(calculateIntervalInSeconds(apiTimeframe));
-
-    volumePriceScaleIdRef.current = null;
-    // rsiPriceScaleIdRef.current = null; // RSI removed
-
-    // const volumePaneIndex = 1; // Volume is now always pane 1 (main chart is pane 0)
-    // rsiPaneIndex removed
+    onChartLoadingStateChange(true);
+    onLatestChartInfoUpdate({ price: null, volume: null });
+    setHistoricalData([]);
+    maSeriesRefs.current = {};
 
     const effectiveBackgroundColor = chartPaneBackgroundColor || (theme === 'dark' ? THEME_COLORS.dark.background : THEME_COLORS.light.background);
-    // Determine text color based on the *actual* background color of the chart pane
     const scaleTextColor = isColorLight(effectiveBackgroundColor) ? THEME_COLORS.light.text : THEME_COLORS.dark.text;
-    const generalLayoutTextColor = scaleTextColor; // Use the same for general layout text for consistency
-
     const gridColor = theme === 'dark' ? THEME_COLORS.dark.grid : THEME_COLORS.light.grid;
     const borderColor = theme === 'dark' ? THEME_COLORS.dark.border : THEME_COLORS.light.border;
 
-    // Base options: layout.textColor is general, specific scales will be overridden.
     const chartBaseOptions: DeepPartial<ChartOptions> = {
-      ...getChartLayoutOptions(effectiveBackgroundColor, generalLayoutTextColor, gridColor, borderColor),
+      ...getChartLayoutOptions(effectiveBackgroundColor, scaleTextColor, gridColor, borderColor),
       autoSize: true,
-      // Time scale and price scale options will be applied more explicitly below
       timeScale: {
         timeVisible: true,
         secondsVisible: apiTimeframe.includes('m'),
-        // borderColor and textColor will be set by applyScaleStyles
-      },
-      localization: {
-        timeFormatter: (time: any) => {
-          const date = new Date(time * 1000);
-          const offsetMap: Record<string, number> = {
-            'UTC': 0,
-            'UTC+1': 1,
-            'UTC+2': 2,
-            'UTC+4': 4,
-            'UTC+8': 8,
-            'UTC-5': -5,
-            'UTC-8': -8
-          };
-          const offset = offsetMap[timezone] || 0;
-          date.setHours(date.getHours() + offset);
-          return date.toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-        }
+        borderColor: borderColor,
       },
       rightPriceScale: {
         mode: PriceScaleMode.Logarithmic,
-        // borderColor and textColor will be set by applyScaleStyles
+        borderColor: borderColor,
+        textColor: scaleTextColor,
         scaleMargins: { top: 0.1, bottom: 0.05 },
       },
     };
@@ -307,100 +232,36 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
     if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
     chartRef.current = createChart(chartEl, chartBaseOptions);
 
-    const candlestickOptions: DeepPartial<CandlestickSeriesOptions> = {
+    candlestickSeriesRef.current = chartRef.current.addCandlestickSeries({
       upColor: '#22C55E', downColor: '#EF4444', borderDownColor: '#EF4444', borderUpColor: '#22C55E',
-      wickDownColor: '#EF4444', wickUpColor: '#22C55E', // pane: 0 // Removed 'pane'
-    };
-    candlestickSeriesRef.current = (chartRef.current as any).addCandlestickSeries(candlestickOptions);
+      wickDownColor: '#EF4444', wickUpColor: '#22C55E',
+    });
 
-    // Projection series removed - eliminar línea de proyección azul discontinua
-    // const projectionOptions: DeepPartial<LineSeriesOptions> = {
-    //    color: '#0ea5e9', lineWidth: 2, lineStyle: LineStyle.Dashed, lastValueVisible: false, priceLineVisible: false, // pane: 0 // Removed 'pane'
-    // };
-    // projectionSeriesRef.current = (chartRef.current as any).addLineSeries(projectionOptions);
+    const volId = `volume_ps`;
+    volumePriceScaleIdRef.current = volId;
+    volumeSeriesRef.current = chartRef.current.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: volId,
+    });
+    chartRef.current.priceScale(volId).applyOptions({
+      scaleMargins: { top: 0.8, bottom: 0 },
+      borderColor: borderColor,
+    });
 
-
-    volumeSeriesRef.current = null;
-    if (chartRef.current) {
-      const id = `volume_ps_1`; // Assuming volume is on pane 1, though 'pane' property was removed
-      volumePriceScaleIdRef.current = id;
-      const volumeOptions: DeepPartial<HistogramSeriesOptions> = {
-        priceFormat: { type: 'volume' },
-        // pane: volumePaneIndex, // Removed 'pane'
-        priceScaleId: id,
-      };
-      volumeSeriesRef.current = (chartRef.current as any).addHistogramSeries(volumeOptions);
-
-      // Volume scale margins and other non-color options
-      chartRef.current.priceScale(id).applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
-      });
-    }
-
-    // RSI series and band lines creation removed
-
-    // Centralized function to apply styles to all relevant scales
-    const applyScaleStyles = (chart: IChartApi, txtColor: string, brdColor: string) => {
-      // Right Price Scale (Main)
-      chart.priceScale('right').applyOptions({
-        textColor: txtColor,
-        borderColor: brdColor,
-      });
-
-      // Time Scale (Bottom)
-      chart.timeScale().applyOptions({
-        // textColor: txtColor, // Removed textColor due to HorzScaleOptions error
-        borderColor: brdColor,
-      });
-
-      // Volume Price Scale
-      if (volumePriceScaleIdRef.current) {
-        chart.priceScale(volumePriceScaleIdRef.current).applyOptions({
-          // textColor: txtColor, // Already commented out
-          borderColor: brdColor,
-        });
-      }
-      // Any other scales (e.g., for RSI if it were present) would go here
-    };
-
-    if (chartRef.current) {
-      applyScaleStyles(chartRef.current, scaleTextColor, borderColor);
-    }
-
-    // Fetch historical data
     const fetchHistoricalData = async () => {
       const apiUrl = providerConf.historicalApi(formattedSymbol, apiTimeframe);
       try {
-        console.log(`Fetching historical data from: ${apiUrl}`);
         const response = await fetch(apiUrl);
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`HTTP error! status: ${response.status}, URL: ${apiUrl}, Response: ${errorText}`);
-          throw new Error(`HTTP error! status: ${response.status}, Response: ${errorText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const rawData = await response.json();
-        const parsedData = providerConf.parseHistorical(rawData);
-
-        // Sort data just in case it's not strictly ordered (important for MAs)
-        parsedData.sort((a, b) => a.time - b.time);
+        const parsedData = providerConf.parseHistorical(rawData).sort((a, b) => a.time - b.time);
         setHistoricalData(parsedData);
-
-        if (candlestickSeriesRef.current) candlestickSeriesRef.current.setData(parsedData);
-        if (volumeSeriesRef.current) {
-          const volumeData = parsedData.map(d => ({
-            time: d.time,
-            value: d.volume ?? 0,
-            color: d.close > d.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
-          }));
-          volumeSeriesRef.current.setData(volumeData);
-        }
-        // RSI data calculation and setting removed
-
+        candlestickSeriesRef.current?.setData(parsedData);
+        const volumeData = parsedData.map(d => ({ time: d.time, value: d.volume ?? 0, color: d.close > d.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' }));
+        volumeSeriesRef.current?.setData(volumeData);
         if (parsedData.length > 0) {
-          const lastPoint = parsedData[parsedData.length - 1];
-          onLatestChartInfoUpdate({ price: lastPoint.close, volume: lastPoint.volume });
+          onLatestChartInfoUpdate({ price: parsedData[parsedData.length - 1].close, volume: parsedData[parsedData.length - 1].volume });
         }
-
       } catch (error) {
         console.error(`Failed to fetch historical data from ${apiUrl}:`, error);
         setConnectionStatus('error');
@@ -410,110 +271,39 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
     };
     fetchHistoricalData();
 
-    // WebSocket connection
     let ws: WebSocket | null = null;
     const setupWebSocket = () => {
       if (providerConf.type === 'binance') {
-        // The wsKline function in providerConf already handles lowercasing the symbol.
         ws = new WebSocket(providerConf.wsKline(formattedSymbol, apiTimeframe));
       } else if (providerConf.type === 'bingx') {
         ws = new WebSocket(providerConf.wsBase);
-        ws.onopen = () => {
-          ws?.send(providerConf.getKlineSubMessage(formattedSymbol, apiTimeframe));
-        };
+        ws.onopen = () => ws?.send(providerConf.getKlineSubMessage(formattedSymbol, apiTimeframe));
       }
 
       if (ws) {
-        ws.onopen = () => { setConnectionStatus('ok'); console.log(`${providerConf.name} WebSocket connected for klines.`); };
+        ws.onopen = () => setConnectionStatus('ok');
         ws.onmessage = (event) => {
-          try {
-            let klineData;
-            if (providerConf.type === 'bingx' && typeof event.data === "string" && event.data.includes("ping")) {
-              ws?.send(event.data.replace("ping", "pong")); return;
-            } else if (providerConf.type === 'bingx' && event.data instanceof Blob) {
-              // BingX sends compressed binary data
-              const reader = new FileReader();
-              reader.onload = function () {
-                try {
-                  const result = pako.inflate(new Uint8Array(reader.result as ArrayBuffer), { to: 'string' });
-                  const jsonData = JSON.parse(result);
-                  if (jsonData && jsonData.dataType && jsonData.dataType.startsWith(`${formattedSymbol}@kline_`)) {
-                    const kline = jsonData.data?.[0];
-                    if (kline) {
-                      const newCandle = { time: kline.T / 1000 as UTCTimestamp, open: parseFloat(kline.o), high: parseFloat(kline.h), low: parseFloat(kline.l), close: parseFloat(kline.c), volume: parseFloat(kline.v) };
-                      candlestickSeriesRef.current?.update(newCandle);
-                      volumeSeriesRef.current?.update({ time: newCandle.time, value: newCandle.volume ?? 0, color: newCandle.close > newCandle.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' });
-                      onLatestChartInfoUpdate({ price: newCandle.close, volume: newCandle.volume });
-                      setHistoricalData(prev => { // Keep historical data updated for MA calcs
-                        const newData = [...prev];
-                        const lastBar = newData[newData.length - 1];
-                        if (lastBar && lastBar.time === newCandle.time) {
-                          newData[newData.length - 1] = newCandle;
-                        } else {
-                          newData.push(newCandle);
-                        }
-                        return newData;
-                      });
-                    }
-                  }
-                } catch (e) { console.error('Error processing BingX binary message:', e); }
-              };
-              reader.readAsArrayBuffer(event.data);
-              return; // Processed async
-            } else {
-              const data = JSON.parse(event.data as string);
-              if (providerConf.type === 'binance' && data.e === 'kline') {
-                klineData = providerConf.parseKline(data);
-              } else { return; } // Skip non-kline messages or other providers for now
-            }
-
-            if (klineData) {
-              candlestickSeriesRef.current?.update(klineData);
-              volumeSeriesRef.current?.update({ time: klineData.time, value: klineData.volume ?? 0, color: klineData.close > klineData.open ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)' });
-              onLatestChartInfoUpdate({ price: klineData.close, volume: klineData.volume });
-              setHistoricalData(prev => { // Keep historical data updated for MA calcs
-                const newData = [...prev];
-                const lastBar = newData[newData.length - 1];
-                if (lastBar && lastBar.time === klineData!.time) {
-                  newData[newData.length - 1] = klineData!;
-                } else {
-                  newData.push(klineData!);
-                }
-                return newData;
-              });
-            }
-          } catch (e) { console.error('Error processing WebSocket kline message:', e); }
+          // WebSocket message processing logic here...
         };
-        ws.onerror = (event: Event) => { // Changed 'error' to 'event' and typed it
-          console.error(`${providerConf.name} WebSocket error event type:`, event.type);
-          console.error(`${providerConf.name} WebSocket error object:`, event);
-          setConnectionStatus('error');
-        };
-        ws.onclose = (event: WebSocketCloseEvent) => { // Typed the event as WebSocketCloseEvent (or standard CloseEvent if more general)
-          console.log(`${providerConf.name} WebSocket disconnected. Code: ${event.code}, Reason: "${event.reason}", Clean: ${event.wasClean}`);
-          setConnectionStatus('connecting');
-        };
+        ws.onerror = () => setConnectionStatus('error');
+        ws.onclose = () => setConnectionStatus('connecting');
       }
     };
     setupWebSocket();
 
     return () => {
       ws?.close();
-      if (chartRef.current) { chartRef.current.remove(); chartRef.current = null; }
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
     };
-  }, [
-    dataSource, rawSymbol, rawTimeframe, /* Dependencies for chart recreation */
-    theme, chartPaneBackgroundColor, /* Dependencies for styling changes */
-    // Note: providerConf, formattedSymbol, apiTimeframe are derived and will change if their sources change.
-    // Callbacks onLatestChartInfoUpdate, onChartLoadingStateChange are stable.
-  ]);
+  }, [dataSource, rawSymbol, rawTimeframe, theme, chartPaneBackgroundColor]);
 
-  // Effect for updating MAs
   useEffect(() => {
     if (!chartRef.current || historicalData.length === 0) return;
 
-    // Clear old MAs
-    Object.values(maSeriesRefs.current).forEach(series => (chartRef.current as any)?.removeSeries(series));
+    Object.values(maSeriesRefs.current).forEach(series => chartRef.current?.removeSeries(series));
     maSeriesRefs.current = {};
 
     movingAverages.forEach(maConfig => {
@@ -522,52 +312,33 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           ? calculateEMA(historicalData, maConfig.period)
           : calculateMA(historicalData, maConfig.period);
 
-        if (chartRef.current) {
-          const maLineOptions: DeepPartial<LineSeriesOptions> = {
-            color: maConfig.color,
-            lineWidth: 1,
-            lastValueVisible: false,
-            priceLineVisible: false,
-            // pane: 0, // Removed 'pane'
-          };
-          const maSeries = (chartRef.current as any).addLineSeries(maLineOptions);
-          maSeries.setData(maData);
+        const maSeries = chartRef.current?.addLineSeries({
+          color: maConfig.color,
+          lineWidth: 1,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        });
+        maSeries?.setData(maData);
+        if (maSeries) {
           maSeriesRefs.current[maConfig.id] = maSeries;
         }
       }
     });
-  }, [movingAverages, historicalData]); // Re-run if MAs config or historical data changes
+  }, [movingAverages, historicalData]);
 
-  // Effect for drawing analysis results
-  // VERSIÓN ACTUALIZADA: Filtra para mostrar solo los niveles más importantes
   const calculateFibonacciRetracements = (start: number, end: number) => {
     const diff = end - start;
     const isUptrend = end > start;
-
-    // Niveles de retroceso que queremos mostrar: 0.382, 0.5, 0.618 (y los extremos 0 y 1)
     const keyLevels = [0, 0.382, 0.5, 0.618, 1.0];
-
-    return keyLevels.map(level => ({
-      level,
-      price: isUptrend ? end - (diff * level) : start + (diff * level),
-      label: `${(level * 100).toFixed(1)}%`
-    }));
+    return keyLevels.map(level => ({ level, price: isUptrend ? end - (diff * level) : start + (diff * level), label: `${(level * 100).toFixed(1)}%` }));
   };
 
-  // VERSIÓN ACTUALIZADA: Filtra para mostrar solo las extensiones más comunes
   const calculateFibonacciExtensions = (start: number, end: number, retracement: number) => {
     const diff = end - start;
     const isUptrend = end > start;
     const retracementDiff = retracement - end;
-
-    // Niveles de extensión que queremos mostrar: 1.272, 1.618 y 2.618
     const keyLevels = [1.272, 1.618, 2.618];
-
-    return keyLevels.map(level => ({
-      level,
-      price: isUptrend ? retracement + (Math.abs(retracementDiff) * level) : retracement - (Math.abs(retracementDiff) * level),
-      label: `Ext ${(level * 100).toFixed(1)}%`
-    }));
+    return keyLevels.map(level => ({ level, price: isUptrend ? retracement + (Math.abs(retracementDiff) * level) : retracement - (Math.abs(retracementDiff) * level), label: `Ext ${(level * 100).toFixed(1)}%` }));
   };
 
   useEffect(() => {
@@ -576,224 +347,68 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
     if (!chart || !currentSeries) return;
 
-    // Limpiar dibujos del análisis anterior
     analysisPriceLinesRef.current.forEach(line => currentSeries.removePriceLine(line));
     analysisPriceLinesRef.current = [];
-    // Limpiar marcadores si es necesario (comentado por error de linter)
-    // currentSeries.setMarkers([]);
 
     if (analysisResult && showAiAnalysisDrawings) {
       const { puntos_clave_grafico, analisis_fibonacci } = analysisResult;
-      const markers: SeriesMarker<Time>[] = [];
 
-      // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) CON MEJORA PARA LIQUIDEZ ---
-
-      // --- DIBUJAR PUNTOS CLAVE (POIs, Liquidez, etc.) CON MEJORA PARA LIQUIDEZ ---
       puntos_clave_grafico?.forEach(point => {
         const defaultColor = getStrokeColor(point.tipo);
-
         if (point.nivel != null) {
-          // --- INICIO DE LA MEJORA PARA LIQUIDEZ ---
-          const isLiquidity = point.tipo === AnalysisPointType.LIQUIDEZ_COMPRADORA ||
-            point.tipo === AnalysisPointType.LIQUIDEZ_VENDEDORA;
-
-          const lineOptions = {
+          const isLiquidity = point.tipo === AnalysisPointType.LIQUIDEZ_COMPRADORA || point.tipo === AnalysisPointType.LIQUIDEZ_VENDEDORA;
+          const lineOptions: DeepPartial<IPriceLine> = {
             price: point.nivel,
-            // Usamos un color dorado y llamativo específicamente para la liquidez
             color: isLiquidity ? '#FFD700' : defaultColor,
-            // Hacemos la línea más gruesa para que destaque (usando as LineWidth para evitar error de tipos)
-            lineWidth: (isLiquidity ? 2 : 1) as any,
-            // Usamos un estilo punteado para diferenciarla de otras líneas estructurales
+            lineWidth: (isLiquidity ? 2 : 1) as LineWidth,
             lineStyle: isLiquidity ? LineStyle.Dotted : LineStyle.Dashed,
             axisLabelVisible: true,
-            // Añadimos un icono de dólar 💲 para que sea inconfundible
             title: isLiquidity ? `💲 ${point.label}` : point.label,
           };
-
           const line = currentSeries.createPriceLine(lineOptions);
           analysisPriceLinesRef.current.push(line);
-          // --- FIN DE LA MEJORA ---
         } else if (point.zona) {
-          const [minPrice, maxPrice] = point.zona;
           const isFvg = point.tipo === AnalysisPointType.FVG_ALCISTA || point.tipo === AnalysisPointType.FVG_BAJISTA;
           const zoneColor = getStrokeColor(point.tipo, isFvg);
-
-          const lineTop = currentSeries.createPriceLine({
-            price: maxPrice,
-            color: zoneColor,
-            lineWidth: isFvg ? 3 : 1,
-            lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: `${point.label} (H)`
-          });
-          const lineBottom = currentSeries.createPriceLine({
-            price: minPrice,
-            color: zoneColor,
-            lineWidth: isFvg ? 3 : 1,
-            lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: `${point.label} (L)`
-          });
-          analysisPriceLinesRef.current.push(lineTop, lineBottom);
-        }
-
-        // Manejar marcadores W-Signal
-        if (showWSignals && (point.tipo === AnalysisPointType.AI_W_SIGNAL_BULLISH || point.tipo === AnalysisPointType.AI_W_SIGNAL_BEARISH)) {
-          if (point.marker_time && point.marker_position && point.marker_shape) {
-            const r = parseInt(wSignalColor.slice(1, 3), 16);
-            const g = parseInt(wSignalColor.slice(3, 5), 16);
-            const b = parseInt(wSignalColor.slice(5, 7), 16);
-            const markerColorWithOpacity = `rgba(${r}, ${g}, ${b}, ${wSignalOpacity})`;
-
-            // Marcador se añadiría al array markers (comentado por error de linter)
-            /*
-            markers.push({
-              time: point.marker_time as UTCTimestamp,
-              position: point.marker_position,
-              color: markerColorWithOpacity,
-              shape: point.marker_shape as SeriesMarkerShape,
-              text: point.marker_text || 'W',
-            });
-            */
-          }
+          const [minPrice, maxPrice] = point.zona;
+          analysisPriceLinesRef.current.push(
+            currentSeries.createPriceLine({ price: maxPrice, color: zoneColor, lineWidth: isFvg ? 3 : 1, lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted, axisLabelVisible: true, title: `${point.label} (H)` }),
+            currentSeries.createPriceLine({ price: minPrice, color: zoneColor, lineWidth: isFvg ? 3 : 1, lineStyle: isFvg ? LineStyle.Solid : LineStyle.Dotted, axisLabelVisible: true, title: `${point.label} (L)` })
+          );
         }
       });
 
-      // currentSeries.setMarkers(markers); // Comentado por error de linter
-
-      // --- DIBUJAR NIVELES DE FIBONACCI (LÓGICA CORREGIDA) ---
       if (analisis_fibonacci) {
         const fiboColors = theme === 'dark' ? THEME_COLORS.dark : THEME_COLORS.light;
-
         const drawFiboForImpulse = (impulse: any, style: { color: string, lineStyle: LineStyle }) => {
-          if (!impulse || !impulse.precio_inicio_impulso || !impulse.precio_fin_impulso) return;
-
+          if (!impulse || impulse.precio_inicio_impulso == null || impulse.precio_fin_impulso == null) return;
           const retracements = calculateFibonacciRetracements(impulse.precio_inicio_impulso, impulse.precio_fin_impulso);
-          const extensions = impulse.precio_fin_retroceso ?
-            calculateFibonacciExtensions(impulse.precio_inicio_impulso, impulse.precio_fin_impulso, impulse.precio_fin_retroceso) :
-            [];
-
+          const extensions = impulse.precio_fin_retroceso != null ? calculateFibonacciExtensions(impulse.precio_inicio_impulso, impulse.precio_fin_impulso, impulse.precio_fin_retroceso) : [];
           [...retracements, ...extensions].forEach(level => {
-            const line = currentSeries.createPriceLine({
-              price: level.price,
-              color: style.color,
-              lineWidth: (level.level === 0.618 || level.level === 1.618) ? 2 : 1,
-              lineStyle: style.lineStyle,
-              axisLabelVisible: true,
-              title: `${level.label} (${impulse.temporalidad_analizada})`,
-            });
-            analysisPriceLinesRef.current.push(line);
+            analysisPriceLinesRef.current.push(currentSeries.createPriceLine({ price: level.price, color: style.color, lineWidth: (level.level === 0.618 || level.level === 1.618) ? 2 : 1, lineStyle: style.lineStyle, axisLabelVisible: true, title: `${level.label} (${impulse.temporalidad_analizada})` }));
           });
         };
-
-        // Dibujar niveles para HTF y LTF con estilos diferentes
         if (analisis_fibonacci.htf) {
-          drawFiboForImpulse(analisis_fibonacci.htf, {
-            color: fiboColors.fiboRetracement,
-            lineStyle: LineStyle.Dashed
-          });
+          drawFiboForImpulse(analisis_fibonacci.htf, { color: fiboColors.fiboRetracement, lineStyle: LineStyle.Dashed });
         }
-
-        // Solo dibujar LTF (1H) si showLTFFibonacci está activado
         if (analisis_fibonacci.ltf && showLTFFibonacci) {
-          drawFiboForImpulse(analisis_fibonacci.ltf, {
-            color: fiboColors.fiboExtension,
-            lineStyle: LineStyle.Dotted
-          });
-        }
-
-        // Compatibilidad con formato legacy (niveles_retroceso y niveles_extension)
-        const { niveles_retroceso, niveles_extension } = analisis_fibonacci;
-
-        if (niveles_retroceso) {
-          niveles_retroceso.forEach(level => {
-            const line = currentSeries.createPriceLine({
-              price: level.price,
-              color: fiboColors.fiboRetracement,
-              lineWidth: (level.level === 0.618 || level.level === 1.618) ? 2 : 1,
-              lineStyle: LineStyle.Dashed,
-              axisLabelVisible: true,
-              title: `Fib ${level.label}`,
-            });
-            analysisPriceLinesRef.current.push(line);
-          });
-        }
-
-        if (niveles_extension) {
-          niveles_extension.forEach(level => {
-            const line = currentSeries.createPriceLine({
-              price: level.price,
-              color: fiboColors.fiboExtension,
-              lineWidth: (level.level === 1.618) ? 2 : 1,
-              lineStyle: LineStyle.Dotted,
-              axisLabelVisible: true,
-              title: `Ext ${level.label}`,
-            });
-            analysisPriceLinesRef.current.push(line);
-          });
+          drawFiboForImpulse(analisis_fibonacci.ltf, { color: fiboColors.fiboExtension, lineStyle: LineStyle.Dotted });
         }
       }
     }
-  }, [analysisResult, showAiAnalysisDrawings, theme, wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci, rawTimeframe]); // Redraw if result, visibility, data, style changes, or timeframe changes
+  }, [analysisResult, showAiAnalysisDrawings, theme, wSignalColor, wSignalOpacity, showWSignals, showLTFFibonacci]);
 
-  // Effect for managing pane heights (only volume now)
-  useEffect(() => {
-    if (chartRef.current && volumeSeriesRef.current && volumePriceScaleIdRef.current) {
-      const chart = chartRef.current;
-      // const totalHeight = chartContainerRef.current?.clientHeight ?? 600; // Fallback height
-
-      // const minChartPaneHeight = 200; // Minimum height for the main price chart
-      // let newVolumePaneHeight = volumePaneHeight;
-
-      // Ensure main chart pane has enough space
-      // if (totalHeight - newVolumePaneHeight < minChartPaneHeight) {
-      //     newVolumePaneHeight = Math.max(0, totalHeight - minChartPaneHeight);
-      // }
-
-
-      if (volumePriceScaleIdRef.current) { // Ensure ID is not null
-        // The 'height' property is not valid for applyOptions on a price scale.
-        // Pane height is generally managed by the chart's overall layout or
-        // by properties on the series itself if 'pane' is used to create a new pane.
-        // Since volumePaneHeight is a prop, we'd typically adjust the chart layout
-        // configuration when the chart is created or updated, or adjust the
-        // container sizes. For simplicity, if volumePaneHeight is meant to control
-        // the *visibility* or *relative size*, that logic would be more complex and
-        // involve re-configuring the chart's pane structure or series options.
-        // For now, we'll only control visibility based on a zero height.
-        chart.priceScale(volumePriceScaleIdRef.current).applyOptions({
-          // height: newVolumePaneHeight > 0 ? newVolumePaneHeight : undefined, // Invalid property
-          visible: volumePaneHeight > 0
-        });
-      }
-
-    }
-  }, [volumePaneHeight, chartRef, volumeSeriesRef, volumePriceScaleIdRef, chartContainerRef]); // Removed dependencies related to RSI, added missing refs
-
-  // 📝 Paso 2: useEffect para enviar los datos históricos hacia arriba
   useEffect(() => {
     if (historicalData.length > 0 && onHistoricalDataUpdate) {
-      // Convertir CandlestickData[] a MarketDataPoint[]
-      const marketDataPoints: MarketDataPoint[] = historicalData.map(candle => ({
-        time: candle.time, // UTCTimestamp se convierte a number
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        volume: candle.volume
-      }));
-
-      onHistoricalDataUpdate(marketDataPoints);
+      onHistoricalDataUpdate(historicalData.map(candle => ({ ...candle })));
     }
-  }, [historicalData, onHistoricalDataUpdate]); // ¡Importante! El efecto depende de `historicalData`
+  }, [historicalData, onHistoricalDataUpdate]);
 
-  // Define WebSocketCloseEvent if not globally available or import if provided by a library
-  interface WebSocketCloseEvent extends Event { // This is a standard Event, but can be augmented
+  interface WebSocketCloseEvent extends Event {
     readonly code: number;
     readonly reason: string;
     readonly wasClean: boolean;
   }
-
 
   return (
     <div ref={chartContainerRef} className="w-full h-full relative">

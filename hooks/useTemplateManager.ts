@@ -31,15 +31,17 @@ export const useTemplateManager = () => {
             const savedTemplates = localStorage.getItem(STORAGE_KEY);
             const activeTemplateId = localStorage.getItem(ACTIVE_TEMPLATE_KEY);
 
-            if (savedTemplates) {
-                const templates: ChartTemplate[] = JSON.parse(savedTemplates);
-                setTemplateData({
-                    templates,
-                    activeTemplateId: activeTemplateId || null
-                });
-            }
+            const templates = savedTemplates ? JSON.parse(savedTemplates) : [];
+
+            setTemplateData({
+                templates,
+                activeTemplateId: activeTemplateId || null
+            });
+
         } catch (error) {
             console.error('Error loading templates from localStorage:', error);
+            // En caso de error, empezar con un estado limpio
+            setTemplateData({ templates: [], activeTemplateId: null });
         }
     }, []);
 
@@ -172,23 +174,10 @@ export const useTemplateManager = () => {
         return templateData.templates.find(t => t.id === templateData.activeTemplateId);
     }, [templateData.templates, templateData.activeTemplateId]);
 
-    // Crear plantilla por defecto inicial si no existe ninguna
-    const createDefaultTemplateIfNeeded = useCallback((initialConfig: TemplateConfiguration) => {
-        if (templateData.templates.length === 0) {
-            const defaultTemplateId = saveTemplate({
-                name: "Configuración Básica",
-                description: "Plantilla con configuración básica por defecto",
-                isDefault: true,
-                configuration: initialConfig
-            });
-
-            // Activar la plantilla recién creada
-            setTemplateData(prev => ({
-                ...prev,
-                activeTemplateId: defaultTemplateId
-            }));
-        }
-    }, [templateData.templates.length, saveTemplate]);
+    // Esta función ahora no hace nada, como se requiere.
+    const createDefaultTemplateIfNeeded = useCallback(() => {
+        return;
+    }, []);
 
     return {
         templates: templateData.templates,
