@@ -51,6 +51,7 @@ const INITIAL_VOLUME_PANE_HEIGHT = 0;
 const INITIAL_W_SIGNAL_COLOR = '#243EA8';
 const INITIAL_W_SIGNAL_OPACITY = 70;
 const INITIAL_SHOW_W_SIGNALS = true;
+const INITIAL_SIGNALS_OPACITY = 65; // 65% opacidad para señales de análisis
 
 const getLocalStorageItem = <T,>(key: string, defaultValue: T): T => {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -90,7 +91,11 @@ const App: React.FC = () => {
   const [actualSymbol, setActualSymbol] = useState<string>(consistentInitialSymbol);
   const [symbolInput, setSymbolInput] = useState<string>(consistentInitialSymbol);
   const [timeframe, setTimeframe] = useState<string>(() => getLocalStorageItem('traderoad_timeframe', DEFAULT_TIMEFRAME));
-  const [favoriteTimeframes, setFavoriteTimeframes] = useState<string[]>(() => getLocalStorageItem('traderoad_favoriteTimeframes', DEFAULT_FAVORITE_TIMEFRAMES));
+  const [favoriteTimeframes, setFavoriteTimeframes] = useState<string[]>(() => {
+    const savedFavorites = getLocalStorageItem('traderoad_favoriteTimeframes', DEFAULT_FAVORITE_TIMEFRAMES);
+    // Ordenar favoritos según el orden definido en QUICK_SELECT_TIMEFRAMES
+    return QUICK_SELECT_TIMEFRAMES.filter(tf => savedFavorites.includes(tf));
+  });
   const [theme, setTheme] = useState<Theme>(() => getLocalStorageItem('traderoad_theme', 'dark'));
   const [movingAverages, setMovingAverages] = useState<MovingAverageConfig[]>(() => getLocalStorageItem('traderoad_movingAverages', initialMAs));
   const [showLTFFibonacci, setShowLTFFibonacci] = useState<boolean>(false);
@@ -102,6 +107,10 @@ const App: React.FC = () => {
   const [wSignalColor, setWSignalColor] = useState<string>(() => getLocalStorageItem('traderoad_wSignalColor', INITIAL_W_SIGNAL_COLOR));
   const [wSignalOpacity, setWSignalOpacity] = useState<number>(() => getLocalStorageItem('traderoad_wSignalOpacity', INITIAL_W_SIGNAL_OPACITY));
   const [showWSignals, setShowWSignals] = useState<boolean>(() => getLocalStorageItem('traderoad_showWSignals', INITIAL_SHOW_W_SIGNALS));
+  const [signalsOpacity, setSignalsOpacity] = useState<number>(() => {
+    const initialOpacity = getLocalStorageItem('traderoad_signalsOpacity', INITIAL_SIGNALS_OPACITY);
+    return initialOpacity;
+  });
 
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [apiKeyPresent, setApiKeyPresent] = useState<boolean>(false);
@@ -116,6 +125,7 @@ const App: React.FC = () => {
 
   const [analysisPanelMode, setAnalysisPanelMode] = useState<AnalysisPanelMode>('initial');
   const [isPanelVisible, setIsPanelVisible] = useState<boolean>(true);
+  const [lastAnalysisClickTime, setLastAnalysisClickTime] = useState<number>(0);
 
   const templateManager = useTemplateManager();
   const [showTemplateManager, setShowTemplateManager] = useState<boolean>(false);
@@ -141,11 +151,12 @@ const App: React.FC = () => {
       localStorage.setItem('traderoad_wSignalColor', JSON.stringify(wSignalColor));
       localStorage.setItem('traderoad_wSignalOpacity', JSON.stringify(wSignalOpacity));
       localStorage.setItem('traderoad_showWSignals', JSON.stringify(showWSignals));
+      localStorage.setItem('traderoad_signalsOpacity', JSON.stringify(signalsOpacity));
     }
   }, [
     dataSource, actualSymbol, timeframe, favoriteTimeframes, theme, movingAverages,
     chartPaneBackgroundColor, volumePaneHeight, showAiAnalysisDrawings,
-    wSignalColor, wSignalOpacity, showWSignals
+    wSignalColor, wSignalOpacity, showWSignals, signalsOpacity
   ]);
 
   useEffect(() => {
@@ -236,6 +247,13 @@ const App: React.FC = () => {
     }
   }, [theme, chartPaneBackgroundColor]);
 
+  // Guardar opacidad de señales en localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('traderoad_signalsOpacity', JSON.stringify(signalsOpacity));
+    }
+  }, [signalsOpacity]);
+
   const handleLatestChartInfoUpdate = useCallback((info: LatestChartInfo) => setLatestChartInfo(info), []);
   const handleChartLoadingStateChange = useCallback((chartLoading: boolean) => setIsChartLoading(chartLoading), []);
 
@@ -297,11 +315,27 @@ const App: React.FC = () => {
   };
 
   const handleShowAnalysis = () => {
+    const currentTime = Date.now();
+    const timeSinceLastClick = currentTime - lastAnalysisClickTime;
+
+    // Si no hay análisis o está cargando, hacer el análisis
     if (!analysisResult || analysisLoading) {
+      setLastAnalysisClickTime(currentTime);
       handleRequestAnalysis();
-    } else {
-      setAnalysisPanelMode('analysis');
+      return;
     }
+
+    // Si ya estamos en modo análisis y el usuario hace clic nuevamente
+    // (dentro de un período razonable, por ejemplo 5 segundos), regenerar
+    if (analysisPanelMode === 'analysis' && timeSinceLastClick < 5000) {
+      setLastAnalysisClickTime(currentTime);
+      handleRequestAnalysis(true); // Forzar regeneración
+      return;
+    }
+
+    // En cualquier otro caso, solo mostrar el análisis existente
+    setLastAnalysisClickTime(currentTime);
+    setAnalysisPanelMode('analysis');
   };
 
   const handleSendMessageToChat = async (messageText: string) => {
@@ -400,14 +434,21 @@ const App: React.FC = () => {
 
   const toggleTimeframeFavorite = (timeframe: string) => {
     setFavoriteTimeframes(prev => {
+      let newFavorites;
       if (prev.includes(timeframe)) {
-        return prev.filter(tf => tf !== timeframe);
+        newFavorites = prev.filter(tf => tf !== timeframe);
       } else {
         if (prev.length >= 8) {
-          return [...prev.slice(0, 7), timeframe];
+          newFavorites = [...prev.slice(0, 7), timeframe];
+        } else {
+          newFavorites = [...prev, timeframe];
         }
-        return [...prev, timeframe];
       }
+
+      // Ordenar favoritos según el orden definido en QUICK_SELECT_TIMEFRAMES
+      const orderedFavorites = QUICK_SELECT_TIMEFRAMES.filter(tf => newFavorites.includes(tf));
+
+      return orderedFavorites;
     });
   };
 
@@ -531,7 +572,7 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setIsPanelVisible(!isPanelVisible)} title="Mostrar/Ocultar Panel" className={`p-2 h-8 w-8 flex items-center justify-center rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-gray-200'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d={isPanelVisible ? "M15 19l-7-7 7-7v14z" : "M9 5v14l11-7z"} /></svg></button>
-            <button onClick={handleShowAnalysis} title="Análisis IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={analysisLoading || isChartLoading || !apiKeyPresent}><span className="text-lg">⚡</span><span className="hidden xl:inline">{analysisLoading ? 'Analizando...' : 'Análisis'}</span></button>
+            <button onClick={handleShowAnalysis} title={analysisResult && analysisPanelMode === 'analysis' ? "Refrescar Análisis" : "Análisis IA"} className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !analysisLoading && !isChartLoading ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={analysisLoading || isChartLoading || !apiKeyPresent}><span className="text-lg">⚡</span><span className="hidden xl:inline">{analysisLoading ? 'Analizando...' : (analysisResult && analysisPanelMode === 'analysis' ? 'Refrescar' : 'Análisis')}</span></button>
             <button onClick={handleShowChat} title="Chat IA" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${apiKeyPresent && !chatLoading ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-400'}`} disabled={chatLoading || !apiKeyPresent}><span className="text-lg">🤖</span><span className="hidden lg:inline">Chat</span></button>
             <button onClick={() => setShowAiAnalysisDrawings(!showAiAnalysisDrawings)} title="Señales" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${showAiAnalysisDrawings ? 'bg-orange-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg><span className="hidden xl:inline">Señales</span></button>
             <button onClick={() => setShowLTFFibonacci(!showLTFFibonacci)} title="Fibonacci LTF" className={`h-8 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shadow-md ${showLTFFibonacci ? 'bg-teal-500 text-white' : 'bg-gray-600 text-white'}`}><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l-4 4m8-8v13l4-4" /></svg><span className="hidden xl:inline">Fib LTF</span></button>
@@ -578,6 +619,7 @@ const App: React.FC = () => {
               showWSignals={showWSignals}
               wSignalColor={wSignalColor}
               wSignalOpacity={wSignalOpacity}
+              signalsOpacity={signalsOpacity}
             />
           </div>
         </div>
@@ -601,6 +643,8 @@ const App: React.FC = () => {
           setWSignalOpacity={setWSignalOpacity}
           showWSignals={showWSignals}
           setShowWSignals={setShowWSignals}
+          signalsOpacity={signalsOpacity}
+          setSignalsOpacity={setSignalsOpacity}
         />
       )}
 

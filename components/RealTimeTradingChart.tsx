@@ -28,6 +28,7 @@ interface RealTimeTradingChartProps {
   showWSignals: boolean;
   wSignalColor: string;
   wSignalOpacity: number;
+  signalsOpacity: number;
 }
 
 type CandlestickData = LWCCandlestickData<UTCTimestamp> & { volume?: number };
@@ -109,6 +110,83 @@ const THEME_COLORS = {
   dark: { text: '#FFFFFF', grid: '#1e293b', fiboRetracement: 'rgba(96, 165, 250, 0.7)', fiboExtension: 'rgba(251, 146, 60, 0.7)' }
 };
 
+// Función para convertir hex a RGBA con opacidad
+const hexToRgba = (hex: string, opacity: number = 0.65): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
+
+// Función para determinar colores de señales según especificaciones del usuario
+const getSignalColor = (tipo: string, temporalidad: string = '', importancia: string = '', label: string = '', opacity: number = 0.65): string => {
+  // Solo importancia alta se queda en amarillo
+  if (importancia === 'alta') {
+    return hexToRgba('#FFD700', opacity);
+  }
+
+  // Detectar tipo por label si no está en tipo
+  const fullText = `${tipo} ${label}`.toLowerCase();
+
+  // BOS y CHOCH en gris
+  if (fullText.includes('bos') || fullText.includes('choch') ||
+    tipo === 'bos_alcista' || tipo === 'bos_bajista' ||
+    tipo === 'choch_alcista' || tipo === 'choch_bajista') {
+    return hexToRgba('#6B7280', opacity);
+  }
+
+  // FVG en azul más oscuro que Fibonacci (diferentes tonos por temporalidad)
+  if (fullText.includes('fvg') || tipo === 'fvg_alcista' || tipo === 'fvg_bajista') {
+    switch (temporalidad?.toLowerCase()) {
+      case '1m': case '5m': return hexToRgba('#1E3A8A', opacity); // Azul muy oscuro
+      case '15m': case '30m': return hexToRgba('#1E40AF', opacity); // Azul oscuro
+      case '1h': case '4h': return hexToRgba('#2563EB', opacity); // Azul medio oscuro
+      case '1d': case '1w': return hexToRgba('#3B82F6', opacity); // Azul medio
+      default: return hexToRgba('#1E40AF', opacity); // Azul oscuro por defecto
+    }
+  }
+
+  // EQ en morado
+  if (fullText.includes('eq') || fullText.includes('equilibrium') || tipo === 'equilibrium') {
+    return hexToRgba('#7C3AED', opacity);
+  }
+
+  // BSL en verde (diferentes tonos por temporalidad)
+  if (fullText.includes('bsl') || fullText.includes('buy_side') || fullText.includes('buy-side') ||
+    tipo.includes('liquidez_compradora') || tipo === 'liquidez_compradora') {
+    switch (temporalidad?.toLowerCase()) {
+      case '1m': case '5m': return hexToRgba('#047857', opacity); // Verde muy oscuro
+      case '15m': case '30m': return hexToRgba('#059669', opacity); // Verde oscuro
+      case '1h': case '4h': return hexToRgba('#10B981', opacity); // Verde medio
+      case '1d': case '1w': return hexToRgba('#22C55E', opacity); // Verde claro
+      default: return hexToRgba('#10B981', opacity); // Verde medio por defecto
+    }
+  }
+
+  // SSL en rojo (diferentes tonos por temporalidad)
+  if (fullText.includes('ssl') || fullText.includes('sell_side') || fullText.includes('sell-side') ||
+    tipo.includes('liquidez_vendedora') || tipo === 'liquidez_vendedora') {
+    switch (temporalidad?.toLowerCase()) {
+      case '1m': case '5m': return hexToRgba('#991B1B', opacity); // Rojo muy oscuro
+      case '15m': case '30m': return hexToRgba('#B91C1C', opacity); // Rojo oscuro
+      case '1h': case '4h': return hexToRgba('#DC2626', opacity); // Rojo medio
+      case '1d': case '1w': return hexToRgba('#EF4444', opacity); // Rojo claro
+      default: return hexToRgba('#DC2626', opacity); // Rojo medio por defecto
+    }
+  }
+
+  // Colores por defecto para otros tipos
+  if (fullText.includes('supply') || fullText.includes('oferta') || tipo === 'poi_oferta') {
+    return hexToRgba('#DC2626', opacity);
+  }
+  if (fullText.includes('demand') || fullText.includes('demanda') || tipo === 'poi_demanda') {
+    return hexToRgba('#16A34A', opacity);
+  }
+
+  // Color por defecto (gris para señales no clasificadas)
+  return hexToRgba('#6B7280', opacity);
+};
+
 const isColorLight = (hexColor: string): boolean => {
   const color = hexColor.startsWith('#') ? hexColor.slice(1) : hexColor;
   if (color.length !== 6 && color.length !== 3) return true;
@@ -125,7 +203,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
   dataSource, symbol, timeframe, analysisResult,
   onLatestChartInfoUpdate, onChartLoadingStateChange, movingAverages, theme,
   chartPaneBackgroundColor, showAiAnalysisDrawings, showLTFFibonacci,
-  onHistoricalDataUpdate, showWSignals, wSignalColor, wSignalOpacity
+  onHistoricalDataUpdate, showWSignals, wSignalColor, wSignalOpacity, signalsOpacity
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartApiRef = useRef<IChartApi | null>(null);
@@ -185,7 +263,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
     // Small delay to ensure cleanup is complete before creating new chart
     const initTimeout = setTimeout(() => {
-      if (!chartEl) return;      try {
+      if (!chartEl) return; try {
         const chart = createChart(chartEl, {
           autoSize: true,
           layout: {
@@ -193,12 +271,12 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
             textColor: theme === 'dark' ? '#FFFFFF' : '#000000'
           },
           grid: {
-            vertLines: { 
+            vertLines: {
               color: theme === 'dark' ? 'rgba(51, 65, 85, 0.3)' : 'rgba(229, 231, 235, 0.5)',
               style: LineStyle.Solid,
               visible: true
             },
-            horzLines: { 
+            horzLines: {
               color: theme === 'dark' ? 'rgba(51, 65, 85, 0.3)' : 'rgba(229, 231, 235, 0.5)',
               style: LineStyle.Solid,
               visible: true
@@ -245,7 +323,7 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           })
           .then(data => {
             if (!isMounted) return;
-            
+
             if (loadingTimeoutRef.current) {
               clearTimeout(loadingTimeoutRef.current);
               loadingTimeoutRef.current = null;
@@ -515,9 +593,12 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
       // 1. Puntos clave del gráfico
       analysisResult.puntos_clave_grafico?.forEach(point => {
+        const opacity = signalsOpacity / 100; // Convertir de 0-100 a 0-1
+        const color = getSignalColor(point.tipo || '', point.temporalidad || '', point.importancia || '', point.label || '', opacity);
+
         if (point.nivel != null) {
           drawLine(point.nivel, {
-            color: '#FFD700',
+            color: color,
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
@@ -525,87 +606,99 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
           });
         }
         if (point.zona) {
-          drawZone(point.zona[0], point.zona[1], '#FFD700', point.label);
+          drawZone(point.zona[0], point.zona[1], color, point.label);
         }
       });
 
       // 2. Liquidez Importante
       if (analysisResult.liquidez_importante) {
+        const opacity = signalsOpacity / 100; // Convertir de 0-100 a 0-1
+
         // Buy-side liquidity (above old highs)
         analysisResult.liquidez_importante.buy_side?.forEach(point => {
+          const color = getSignalColor('buy_side', point.temporalidad || '', point.importancia || '', point.label || '', opacity);
+
           if (point.nivel != null) {
             drawLine(point.nivel, {
-              color: '#22C55E',
+              color: color,
               lineWidth: 2,
               lineStyle: LineStyle.Solid,
               axisLabelVisible: true,
               title: `BSL: ${point.label}`,
             });
           }
-          const marker = createMarker(point, '#22C55E', 'arrowUp', 'belowBar');
+          const marker = createMarker(point, color, 'arrowUp', 'belowBar');
           if (marker) allMarkers.push(marker);
         });
 
         // Sell-side liquidity (below old lows)
         analysisResult.liquidez_importante.sell_side?.forEach(point => {
+          const color = getSignalColor('sell_side', point.temporalidad || '', point.importancia || '', point.label || '', opacity);
+
           if (point.nivel != null) {
             drawLine(point.nivel, {
-              color: '#EF4444',
+              color: color,
               lineWidth: 2,
               lineStyle: LineStyle.Solid,
               axisLabelVisible: true,
               title: `SSL: ${point.label}`,
             });
           }
-          const marker = createMarker(point, '#EF4444', 'arrowDown', 'aboveBar');
+          const marker = createMarker(point, color, 'arrowDown', 'aboveBar');
           if (marker) allMarkers.push(marker);
         });
       }
 
       // 3. Zonas Críticas de Oferta y Demanda
       if (analysisResult.zonas_criticas_oferta_demanda) {
+        const opacity = signalsOpacity / 100; // Convertir de 0-100 a 0-1
+
         // Order Blocks de Oferta (Supply/Bearish OB)
         analysisResult.zonas_criticas_oferta_demanda.oferta_clave?.forEach(point => {
+          const color = getSignalColor(point.tipo || 'oferta', point.temporalidad || '', point.importancia || '', point.label || '', opacity);
+
           if (point.zona) {
-            drawZone(point.zona[0], point.zona[1], '#DC2626', `OB Supply: ${point.label}`);
+            drawZone(point.zona[0], point.zona[1], color, `OB Supply: ${point.label}`);
           } else if (point.nivel != null) {
             drawLine(point.nivel, {
-              color: '#DC2626',
+              color: color,
               lineWidth: 1,
               lineStyle: LineStyle.Dashed,
               axisLabelVisible: true,
               title: `Supply: ${point.label}`,
             });
           }
-          const marker = createMarker(point, '#DC2626', 'circle', 'aboveBar');
+          const marker = createMarker(point, color, 'circle', 'aboveBar');
           if (marker) allMarkers.push(marker);
         });
 
         // Order Blocks de Demanda (Demand/Bullish OB)
         analysisResult.zonas_criticas_oferta_demanda.demanda_clave?.forEach(point => {
+          const color = getSignalColor(point.tipo || 'demanda', point.temporalidad || '', point.importancia || '', point.label || '', opacity);
+
           if (point.zona) {
-            drawZone(point.zona[0], point.zona[1], '#16A34A', `OB Demand: ${point.label}`);
+            drawZone(point.zona[0], point.zona[1], color, `OB Demand: ${point.label}`);
           } else if (point.nivel != null) {
             drawLine(point.nivel, {
-              color: '#16A34A',
+              color: color,
               lineWidth: 1,
               lineStyle: LineStyle.Dashed,
               axisLabelVisible: true,
               title: `Demand: ${point.label}`,
             });
           }
-          const marker = createMarker(point, '#16A34A', 'circle', 'belowBar');
+          const marker = createMarker(point, color, 'circle', 'belowBar');
           if (marker) allMarkers.push(marker);
         });
 
         // Fair Value Gaps (FVG)
         analysisResult.zonas_criticas_oferta_demanda.fvg_importantes?.forEach(point => {
+          const color = getSignalColor('fvg', point.temporalidad || '', point.importancia || '', point.label || '', opacity);
+
           if (point.zona) {
-            const color = point.tipo?.includes('alcista') ? '#06B6D4' : '#F59E0B';
             drawZone(point.zona[0], point.zona[1], color, `FVG: ${point.label}`);
           }
-          const markerColor = point.tipo?.includes('alcista') ? '#06B6D4' : '#F59E0B';
-          const marker = createMarker(point, markerColor, 'square', 'inBar');
+          const marker = createMarker(point, color, 'square', 'inBar');
           if (marker) allMarkers.push(marker);
         });
       }
@@ -654,25 +747,25 @@ const RealTimeTradingChart: React.FC<RealTimeTradingChartProps> = ({
 
         if (htf) {
           calculateFibonacciRetracements(htf.precio_inicio_impulso, htf.precio_fin_impulso)
-            .forEach(level => drawLine(level.price, { 
-              color: fiboColors.fiboRetracement, 
-              lineStyle: LineStyle.Dotted, 
-              axisLabelVisible: true, 
-              title: `${level.label} HTF` 
+            .forEach(level => drawLine(level.price, {
+              color: fiboColors.fiboRetracement,
+              lineStyle: LineStyle.Dotted,
+              axisLabelVisible: true,
+              title: `${level.label} HTF`
             }));
         }
         if (ltf && showLTFFibonacci) {
           calculateFibonacciRetracements(ltf.precio_inicio_impulso, ltf.precio_fin_impulso)
-            .forEach(level => drawLine(level.price, { 
-              color: fiboColors.fiboExtension, 
-              lineStyle: LineStyle.Dotted, 
-              axisLabelVisible: true, 
-              title: `${level.label} LTF` 
+            .forEach(level => drawLine(level.price, {
+              color: fiboColors.fiboExtension,
+              lineStyle: LineStyle.Dotted,
+              axisLabelVisible: true,
+              title: `${level.label} LTF`
             }));
         }
       }
     }
-  }, [analysisResult, showAiAnalysisDrawings, showLTFFibonacci, showWSignals, wSignalColor, theme, historicalData]);
+  }, [analysisResult, showAiAnalysisDrawings, showLTFFibonacci, showWSignals, wSignalColor, theme, historicalData, signalsOpacity]);
 
   return (
     <div className="w-full h-full relative">
